@@ -20,6 +20,7 @@
     { id: 'grupos', rot: 'Grupos e links', ic: 'grupos', perm: 'disparos' },
     { sec: 'Gestão', perm: 'relatorios' },
     { id: 'relatorios', rot: 'Relatórios', ic: 'relatorios', perm: 'relatorios' },
+    { id: 'financeiro', rot: 'Financeiro', ic: 'dinheiro', perm: 'financeiro' },
     { id: 'equipe', rot: 'Equipe e acessos', ic: 'usuarioMais', perm: 'equipe' },
     { id: 'integracoes', rot: 'Integrações', ic: 'integracoes', perm: 'integracoes' },
     { id: 'ajustes', rot: 'Ajustes', ic: 'ajustes', perm: 'ajustes' }
@@ -67,6 +68,8 @@
       '<p class="small" style="margin-top:18px;text-align:center"><a href="#" id="l-trocar">Trocar servidor</a>' + (C.ehDemo() ? ' · <a href="#" id="l-reset">Reiniciar demonstração</a>' : '') + '</p>' +
       '</form></div></div>';
     if (C.ehDemo()) { C.$('#l-email').value = 'demo@prumo.app'; C.$('#l-senha').value = 'demo1234'; }
+    // demonstração: ?demo=1&entrar=1 entra direto (usado nos vídeos e nas capturas da página de vendas)
+    if (C.ehDemo() && /[?&]entrar=1/.test(location.search)) setTimeout(function () { var f = C.$('#f-login'); if (f) f.requestSubmit(); }, 50);
     C.$('#l-trocar').onclick = function (e) { e.preventDefault(); C.store.del('prumo_api'); C.store.del('prumo_marca'); location.reload(); };
     if (C.$('#l-reset')) C.$('#l-reset').onclick = function (e) { e.preventDefault(); window.PrumoDemo.resetar(); };
     C.$('#f-login').addEventListener('submit', function (ev) {
@@ -94,7 +97,7 @@
 
   /* ------------------------------------------------------------ dados */
   C.aplicarDados = function (d) {
-    S.user = d.usuario; S.perm = d.permissoes || {}; S.config = d.config || {};
+    S.user = d.usuario; S.perm = d.permissoes || {}; S.config = d.config || {}; S.areas = d.areas || {}; S.suporte = d.suporte || {};
     S.usuarios = d.usuarios || []; S.funis = d.funis || []; S.contatos = d.contatos || []; S.negocios = d.negocios || [];
     S.tarefas = d.tarefas || []; S.modelos = d.modelos || []; S.automacoes = d.automacoes || []; S.campanhas = d.campanhas || []; S.emails = d.emails || [];
     S.grupos = d.grupos || []; S.ultimaSync = d.agora; S.carregado = true;
@@ -108,11 +111,17 @@
     return C.api('bootstrap').then(function (d) {
       C.aplicarDados(d);
       if (!S.config.marca.configurado && S.perm.ajustes) return assistente();
-      var salva = C.store.get('prumo_view', 'painel');
+      var pedida = C.ehDemo() && (location.search.match(/[?&]tela=([a-z]+)/) || [])[1];
+      var salva = pedida || C.store.get('prumo_view', 'painel');
       S.view = permitido(salva) ? salva : 'painel';
       renderShell();
       iniciarSync();
       registrarSite();
+      if (C.ehDemo()) setTimeout(function () { // demonstração: abrir uma conversa ou uma automação pela URL
+        var q = location.search, cv = (q.match(/[?&]conversa=(\w+)/) || [])[1], ed = (q.match(/[?&]editar=(\w+)/) || [])[1];
+        if (cv) C.abrirConversa(cv);
+        var b = ed && document.querySelector('[data-edit="' + ed + '"]'); if (b) b.click();
+      }, 300);
     });
   }
 

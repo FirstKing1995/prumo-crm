@@ -69,7 +69,7 @@
     box.innerHTML = l.slice(0, 300).map(function (c) {
       var nl = C.num(c.nao_lidas);
       var u = C.usuario(c.responsavel_id);
-      return '<button class="ib-item ' + (c.id === aberto ? 'on' : '') + (C.foraDoPrazo(c) ? ' atrasada' : '') + '" data-c="' + c.id + '">' + C.av(c.nome) + '<div class="meio"><div class="l1"><b>' + (c.canal === 'instagram' ? '<span class="canal-ig" title="Instagram">' + ic('instagram') + '</span>' : '') + esc(c.nome) + '</b><span class="hora">' + C.rel(c.ultima_msg_em) + '</span></div>' +
+      return '<button class="ib-item ' + (c.id === aberto ? 'on' : '') + (C.foraDoPrazo(c) ? ' atrasada' : '') + '" data-c="' + c.id + '">' + C.av(c.nome) + '<div class="meio"><div class="l1"><b>' + (c.canal === 'instagram' ? '<span class="canal-ig" title="Instagram">' + ic('instagram') + '</span>' : c.canal === 'site' ? '<span class="canal-ig canal-site" title="Chat do site">' + ic('conversas') + '</span>' : '') + esc(c.nome) + '</b><span class="hora">' + C.rel(c.ultima_msg_em) + '</span></div>' +
         '<div class="l2"><span>' + (c.ultima_direcao === 'out' ? ic('check2').replace('class="i ', 'class="i " style="width:14px;height:14px;color:#53BDEB" data-x="') : '') + esc(c.ultima_msg) + '</span>' + (nl ? '<span class="naolidas">' + nl + '</span>' : '') + '</div>' +
         (u || C.tags(c.tags).length ? '<div class="l2" style="margin-top:4px">' + (u ? '<span class="chip" style="flex:none">' + esc(C.primeiroNome(u.nome)) + '</span>' : '') + C.tags(c.tags).slice(0, 2).map(function (t) { return '<span class="chip" style="flex:none">' + esc(t) + '</span>'; }).join('') + '</div>' : '') +
         '</div></button>';
@@ -112,7 +112,7 @@
   function pintarChat(c) {
     var ch = C.$('#chat');
     ch.innerHTML = '<div class="chat-cab"><button class="btn fantasma ic peq" id="ch-volta" aria-label="Voltar">' + ic('esq') + '</button>' + C.av(c.nome) +
-      '<div class="trunc" style="flex:1;cursor:pointer" id="ch-nome"><b class="trunc" style="display:block">' + esc(c.nome) + '</b><span class="small muted">' + (c.canal === 'instagram' ? ic('instagram') + ' @' + esc(c.ig_usuario || 'Instagram') : esc(C.tel(c.telefone))) + '</span></div>' +
+      '<div class="trunc" style="flex:1;cursor:pointer" id="ch-nome"><b class="trunc" style="display:block">' + esc(c.nome) + '</b><span class="small muted">' + (c.canal === 'instagram' ? ic('instagram') + ' @' + esc(c.ig_usuario || 'Instagram') : c.canal === 'site' ? 'Chat do site' + (c.telefone ? ' · ' + esc(C.tel(c.telefone)) : '') : esc(C.tel(c.telefone))) + '</span></div>' +
       (C.pode('passar') ? '<button class="btn peq" id="ch-passar" title="Passar para um closer">' + ic('passar') + '<span class="txt"> Passar</span></button>' : '') +
       '<button class="btn peq" id="ch-robo"></button>' +
       '<button class="btn fantasma ic" id="ch-info" aria-label="Detalhes do contato">' + ic('info') + '</button></div>' +
@@ -120,6 +120,7 @@
       '<div class="chat-pe"><div class="rapidas hidden" id="ch-rap"></div>' +
       '<button class="btn fantasma ic" id="ch-anexo" aria-label="Anexar mídia">' + ic('clipe') + '</button>' +
       '<button class="btn fantasma ic" id="ch-mod" aria-label="Respostas rápidas">' + ic('raio') + '</button>' +
+      '<button class="btn fantasma ic" id="ch-salvamod" aria-label="Salvar o texto como modelo" title="Salvar o texto como modelo">' + ic('nota') + '</button>' +
       '<textarea class="inp" id="ch-txt" rows="1" placeholder="Digite a mensagem. Use / para respostas rápidas"></textarea>' +
       '<button class="btn verde ic" id="ch-env" aria-label="Enviar">' + ic('enviar') + '</button></div>';
     var w = window.innerWidth > 900;
@@ -141,6 +142,7 @@
     });
     C.$('#ch-env').onclick = function () { enviar(); };
     C.$('#ch-mod').onclick = function () { ta.value = '/'; rapidas(); ta.focus(); };
+    C.$('#ch-salvamod').onclick = function () { C.salvarComoModelo(ta.value, { url: ta.dataset.midia, tipo: ta.dataset.midiaTipo }); };
     C.$('#ch-anexo').onclick = anexar;
     if (C.$('#ch-passar')) C.$('#ch-passar').onclick = function () { C.passarLead(c, function () { C.recarregar(); }); };
     pintarCabRobo();

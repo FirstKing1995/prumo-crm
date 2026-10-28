@@ -37,13 +37,14 @@
       }
       h += '<div class="kpis">' +
         kpi('contatos', 'Novos contatos (7 dias)', C.inteiro(novos7), C.inteiro(novos30) + ' nos últimos 30 dias') +
+        kpi('estrela', 'Clientes ativos', C.inteiro(cs.filter(function (c) { return c.status === 'cliente'; }).length), 'de ' + C.inteiro(cs.length) + ' contatos na base') +
         kpi('conversas', 'Conversas aguardando', C.inteiro(naoLidas), foraSla.length ? '<span style="color:var(--vermelho);font-weight:700">' + foraSla.length + ' há mais de ' + sla + ' min</span>' : 'com mensagem não lida') +
         kpi('negocios', 'Em negociação', C.brlCurto(abertos.reduce(function (s, n) { return s + C.num(n.valor); }, 0)), abertos.length + ' negócios abertos') +
         kpi('trofeu', 'Vendido no mês', C.brlCurto(ganhosMes.reduce(function (s, n) { return s + C.num(n.valor); }, 0)), ganhosMes.length + ' negócios ganhos') +
         kpi('raio', 'Taxa de conversão', C.pct(ganhos30.length, fech30.length) + '%', 'negócios fechados em 30 dias') +
         kpi('tarefas', 'Tarefas atrasadas', C.inteiro(atrasadas.length), atrasadas.length ? 'precisam de atenção' : 'tudo em dia') +
         '</div>';
-      h += painelEquipe();
+      h += avisoSuporte() + '<div id="p-fin"></div>' + painelEquipe();
       h += '<div class="grid-3"><div class="card"><div class="card-cab"><h3>Novos contatos por dia</h3><span class="acoes small muted">últimos 30 dias</span></div><div class="card-pad">' +
         '<div class="barras">' + dias.map(function (k) { var v = porDia[k] || 0; return '<div class="b" style="height:' + Math.max(2, v / max * 100) + '%" data-t="' + k.slice(8, 10) + '/' + k.slice(5, 7) + ': ' + v + '"></div>'; }).join('') + '</div>' +
         '<div class="eixo"><span>' + C.fmtData(dias[0], false) + '</span><span>hoje</span></div></div></div>';
@@ -68,6 +69,7 @@
       h += '</div></div>';
       el.innerHTML = h;
       ligarTarefas(el, function () { C.render(); });
+      painelFinanceiro();
       C.$$('[data-reu]', el).forEach(function (b) { b.onclick = function () { C.acoesReuniao(S.negocios.filter(function (n) { return n.id === b.dataset.reu; })[0], function () { C.recarregar(); }); }; });
       C.$$('[data-conv]', el).forEach(function (b) { b.onclick = function () { C.abrirConversa(b.dataset.conv); }; });
       C.$$('[data-ir2]', el).forEach(function (b) { b.onclick = function () { C.ir(b.dataset.ir2); }; });
@@ -94,6 +96,26 @@
       return '<button class="ib-item" data-reu="' + n.id + '">' + C.av(c ? c.nome : '?') + '<div class="meio"><div class="l1"><b>' + esc(c ? c.nome : n.titulo) + '</b><span class="hora' + (passou ? '" style="color:var(--vermelho)' : '') + '">' + C.fmtData(n.reuniao_em) + '</span></div><div class="l2"><span>' + (passou ? 'Marque se aconteceu' : 'com ' + esc(uc ? uc.nome : '')) + '</span></div></div></button>';
     }).join('') : '<div class="vazio" style="padding:20px"><p>Nenhuma reunião marcada.</p></div>') + '</div></div>';
     return h;
+  }
+  /** Aviso do plano de suporte para o administrador (vencendo ou vencido). */
+  function avisoSuporte() {
+    var sp = S.suporte || {};
+    if (!C.pode('equipe')) return '';
+    if (!sp.tem) return '<div class="aviso info">' + ic('escudo') + '<div>Cole o <b>código de suporte</b> que veio com a sua compra em Ajustes > Sistema para ver o seu plano e o contato do suporte.</div></div>';
+    if (sp.dias < 0) return '<div class="aviso">' + ic('info') + '<div>O seu plano de suporte terminou em ' + sp.ate.split('-').reverse().join('/') + '. O sistema continua funcionando normalmente, mas sem novas atualizações e correções.' + (sp.contato ? ' Para renovar: <b>' + esc(sp.contato) + '</b>.' : '') + '</div></div>';
+    if (sp.dias <= 15) return '<div class="aviso">' + ic('relogio') + '<div>O seu plano de suporte termina em ' + sp.dias + ' dia' + (sp.dias === 1 ? '' : 's') + '.' + (sp.contato ? ' Para renovar: <b>' + esc(sp.contato) + '</b>.' : '') + '</div></div>';
+    return '';
+  }
+  /** Linha do financeiro no painel (para quem tem acesso ao financeiro). */
+  function painelFinanceiro() {
+    var box = C.$('#p-fin');
+    if (!box || !C.pode('financeiro')) return;
+    C.api('financeiro.resumo', {}).then(function (r) {
+      if (!box.isConnected || (!r.recebido && !r.a_receber && !r.atraso)) return;
+      box.innerHTML = '<div class="kpis">' + kpi('dinheiro', 'Entrou no mês', C.brlCurto(r.liquido), r.recebido_qtd + ' pagamentos') + kpi('calendario', 'A receber', C.brlCurto(r.a_receber), 'parcelas futuras') +
+        kpi('alerta', 'Inadimplentes', C.inteiro(r.inadimplentes), C.brl(r.atraso) + ' em atraso') + kpi('relogio', 'Vence em 7 dias', C.brlCurto(r.vencendo7), r.vencendo7_qtd + ' parcelas') + '</div>';
+      C.$$('.kpi', box).forEach(function (k) { k.style.cursor = 'pointer'; k.onclick = function () { C.ir('financeiro'); }; });
+    }).catch(function () { });
   }
   function kpi(i, rot, val, sub) { return '<div class="card kpi"><div class="rot">' + ic(i) + rot + '</div><div class="val">' + val + '</div><div class="sub">' + sub + '</div></div>'; }
 
@@ -408,6 +430,7 @@
           var et = C.etapa(n.etapa_id);
           return '<div class="card" style="padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;cursor:pointer" data-neg="' + n.id + '"><span class="col-cab"><span class="bol" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + esc(et ? et.cor : '#999') + '"></span></span><div class="trunc" style="flex:1"><b>' + esc(n.titulo) + '</b><div class="small muted">' + esc(et ? et.nome : '') + ' · ' + C.brl(n.valor) + (n.reuniao_em ? ' · reunião ' + C.fmtData(n.reuniao_em) + ' (' + ({ agendada: 'marcada', realizada: 'realizada', no_show: 'faltou', cancelada: 'cancelada' }[n.reuniao_status] || '') + ')' : '') + '</div></div>' + (n.reuniao_em && n.reuniao_status === 'agendada' ? '<button class="btn peq" data-reuniao="' + n.id + '">' + ic('calendario') + '</button>' : '') + '<span class="status ' + (n.status === 'ganho' ? 'st-on' : n.status === 'perdido' ? 'st-erro' : 'st-lead') + '">' + n.status + '</span></div>';
         }).join('') : '<p class="small muted" style="margin:0">Nenhum negócio.</p>');
+        h += '<div id="fc-box"></div>';
         var tars = dados.tarefas.filter(function (t) { return t.feita !== 'SIM'; });
         h += '<h4 class="rot" style="margin:20px 0 8px">Tarefas abertas</h4>' + (tars.length ? '<div class="card">' + tars.map(linhaTarefa).join('') + '</div>' : '<p class="small muted" style="margin:0">Nenhuma tarefa aberta.</p>');
         var ativas = dados.execucoes.filter(function (e) { return /esperando|rodando/.test(e.status); });
@@ -425,6 +448,7 @@
       C.$$('[data-aba]', g).forEach(function (b) { b.onclick = function () { aba = b.dataset.aba; pintar(); }; });
       C.$$('[data-neg]', g).forEach(function (b) { b.onclick = function () { C.formNegocio(dados.negocios.filter(function (n) { return n.id === b.dataset.neg; })[0], function () { carregar(); }); }; });
       ligarTarefas(g, carregar);
+      var fcb = g.querySelector('#fc-box'); if (fcb) C.financeiroDoContato(fcb, c, carregar);
       C.$$('[data-reuniao]', g).forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); C.acoesReuniao(dados.negocios.filter(function (n) { return n.id === b.dataset.reuniao; })[0], carregar); }; });
       var hm = g.querySelector('#h-mais');
       if (hm) hm.onclick = function () {
@@ -639,26 +663,30 @@
     };
   };
 
-  var filtroT = 'abertas';
+  var filtroT = 'abertas', pessoaT = '';
   C.views.tarefas = {
     titulo: 'Tarefas',
     acoes: function () { return '<button class="btn pri" data-a="nova">' + ic('plus') + '<span class="txt"> Nova tarefa</span></button>'; },
     ligarAcoes: function (el) { el.querySelector('[data-a=nova]').onclick = function () { C.formTarefa({}, function () { C.render(); }); }; },
     render: function (el) {
       var agora = C.isoLocal(), hoje = C.hoje();
-      var minhas = S.tarefas.filter(function (t) { return C.pode('todos') || t.responsavel_id === S.user.id || !t.responsavel_id; });
+      // cada pessoa vê as próprias tarefas; quem gerencia escolhe de quem ver
+      if (!pessoaT || !C.pode('todos')) pessoaT = S.user.id;
+      var minhas = S.tarefas.filter(function (t) { return pessoaT === '_todas' || t.responsavel_id === pessoaT || (!t.responsavel_id && pessoaT === S.user.id); });
       var grupos = {
         abertas: [['Atrasadas', minhas.filter(function (t) { return t.feita !== 'SIM' && t.vence_em && t.vence_em < agora; })],
         ['Hoje', minhas.filter(function (t) { return t.feita !== 'SIM' && t.vence_em >= agora && t.vence_em.slice(0, 10) === hoje; })],
         ['Próximas', minhas.filter(function (t) { return t.feita !== 'SIM' && (!t.vence_em || t.vence_em.slice(0, 10) > hoje); })]],
         feitas: [['Concluídas', minhas.filter(function (t) { return t.feita === 'SIM'; }).slice(-100).reverse()]]
       }[filtroT];
-      el.innerHTML = '<div class="barra-ferr"><div class="seg"><button data-ft="abertas" class="' + (filtroT === 'abertas' ? 'on' : '') + '">Abertas</button><button data-ft="feitas" class="' + (filtroT === 'feitas' ? 'on' : '') + '">Concluídas</button></div></div>' +
+      el.innerHTML = '<div class="barra-ferr"><div class="seg"><button data-ft="abertas" class="' + (filtroT === 'abertas' ? 'on' : '') + '">Abertas</button><button data-ft="feitas" class="' + (filtroT === 'feitas' ? 'on' : '') + '">Concluídas</button></div>' +
+        (C.pode('todos') ? '<select class="inp" id="t-pessoa" style="max-width:240px" aria-label="Tarefas de"><option value="' + S.user.id + '">Minhas tarefas</option>' + S.usuarios.filter(function (u) { return u.id !== S.user.id && u.ativo === 'SIM'; }).map(function (u) { return '<option value="' + u.id + '"' + (pessoaT === u.id ? ' selected' : '') + '>Tarefas de ' + esc(u.nome) + '</option>'; }).join('') + '<option value="_todas"' + (pessoaT === '_todas' ? ' selected' : '') + '>Toda a equipe</option></select>' : '') + '</div>' +
         grupos.map(function (g) {
           var l = g[1].sort(function (a, b) { return (a.vence_em || '9') < (b.vence_em || '9') ? -1 : 1; });
           return '<div class="card" style="margin-bottom:14px"><div class="card-cab"><h3>' + g[0] + '</h3><span class="acoes small muted">' + l.length + '</span></div>' + (l.length ? l.map(linhaTarefa).join('') : '<div class="small muted" style="padding:14px 16px">Nada aqui.</div>') + '</div>';
         }).join('');
       C.$$('[data-ft]', el).forEach(function (b) { b.onclick = function () { filtroT = b.dataset.ft; C.render(); }; });
+      var tp = C.$('#t-pessoa', el); if (tp) tp.onchange = function () { pessoaT = tp.value; C.render(); };
       ligarTarefas(el, function () { C.render(); });
     }
   };

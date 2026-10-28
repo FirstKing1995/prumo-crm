@@ -118,6 +118,7 @@
         '<div class="aviso ok" id="d-total" style="margin-bottom:0">' + ic('contatos') + '<div>Calculando público...</div></div></div>' +
         '<div id="d-pub-grupos"' + (destino === 'contatos' ? ' class="hidden"' : '') + '>' + (S.grupos.filter(function (g) { return g.jid; }).length ? S.grupos.filter(function (g) { return g.jid; }).map(function (g) { return '<label class="check"><input type="checkbox" data-gr="' + g.id + '"' + (gruposSel.indexOf(g.id) >= 0 ? ' checked' : '') + '> ' + esc(g.nome) + '</label>'; }).join('') : '<div class="aviso">' + ic('info') + '<div>Nenhum grupo com ID do WhatsApp. Em Grupos e links, clique em Importar do WhatsApp.</div></div>') + '</div>' +
         '</div><div>' +
+        '<div class="linha" style="align-items:center;margin-bottom:6px"><select class="inp" id="d-modelo" aria-label="Usar um modelo"><option value="">Usar um modelo salvo...</option>' + S.modelos.map(function (m) { return '<option value="' + m.id + '">' + esc(m.titulo) + '</option>'; }).join('') + '</select><button type="button" class="btn peq" id="d-salvamod" style="flex:0 0 auto">' + ic('nota') + ' Salvar como modelo</button></div>' +
         '<div class="campo"><label>Mensagem</label><textarea class="inp" id="d-texto" rows="6" placeholder="{Oi|Olá} {primeiro_nome}! ...">' + esc(c.texto || '') + '</textarea>' +
         '<div class="chips" style="margin-top:4px">' + ['{primeiro_nome}', '{saudacao}', '{minha_empresa}', '{Oi|Olá|E aí}'].map(function (v) { return '<button type="button" class="chip" data-var="' + v + '">' + v + '</button>'; }).join('') + '</div></div>' +
         '<div class="grade2"><div class="campo"><label>Mídia (opcional)</label><select class="inp" id="d-mtipo">' + [['', 'Só texto'], ['image', 'Imagem'], ['video', 'Vídeo'], ['audio', 'Áudio'], ['document', 'Documento']].map(function (o) { return '<option value="' + o[0] + '"' + ((c.midia_tipo || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
@@ -179,6 +180,14 @@
       el.querySelector('#d-velaj').textContent = (VEL[el.querySelector('#d-vel').value] || VEL.normal)[1];
     };
     ta.oninput = prev; el.querySelector('#d-vel').onchange = prev; prev();
+    el.querySelector('#d-modelo').onchange = function () {
+      var m = S.modelos.filter(function (x) { return x.id === this.value; }, this)[0];
+      if (!m) return;
+      ta.value = m.texto;
+      if (m.midia_url) { el.querySelector('#d-murl').value = m.midia_url; el.querySelector('#d-mtipo').value = m.midia_tipo || 'image'; }
+      prev(); this.value = '';
+    };
+    el.querySelector('#d-salvamod').onclick = function () { C.salvarComoModelo(ta.value, { url: el.querySelector('#d-murl').value.trim(), tipo: el.querySelector('#d-mtipo').value }); };
     C.$$('[data-var]', el).forEach(function (b) { b.onclick = function () { var s = ta.selectionStart || ta.value.length; ta.value = ta.value.slice(0, s) + b.dataset.var + ta.value.slice(s); prev(); ta.focus(); }; });
     el.querySelector('#d-ok').onclick = function () {
       C.comBotao(this, function () {

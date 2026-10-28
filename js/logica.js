@@ -7,13 +7,13 @@
    Tudo o que depende do lugar (ler/gravar dados, chamar URLs, cache, hora)
    chega pelo objeto P ("plataforma"). Nada aqui conhece planilha ou navegador.
    ========================================================================== */
-var PRUMO_VERSAO = '1.2.0';
+var PRUMO_VERSAO = '1.3.0';
 
 var PRUMO_ESQUEMA = {
-  Usuarios: ['id', 'nome', 'email', 'senha_hash', 'salt', 'perfil', 'ativo', 'recebe_leads', 'cor', 'ultimo_acesso', 'criado_em', 'meta_valor', 'meta_reunioes'],
+  Usuarios: ['id', 'nome', 'email', 'senha_hash', 'salt', 'perfil', 'ativo', 'recebe_leads', 'cor', 'ultimo_acesso', 'criado_em', 'meta_valor', 'meta_reunioes', 'permissoes'],
   Contatos: ['id', 'nome', 'telefone', 'email', 'empresa', 'cargo', 'cidade', 'origem', 'tags', 'responsavel_id', 'status', 'campos', 'notas',
     'optout', 'bot_pausado_ate', 'ultima_msg', 'ultima_msg_em', 'ultima_direcao', 'nao_lidas', 'total_msgs', 'criado_em', 'atualizado_em',
-    'canal', 'ig_id', 'ig_usuario', 'janela_ate', 'gratis_ate', 'sdr_id', 'pontos', 'email_optout', 'ultima_visita'],
+    'canal', 'ig_id', 'ig_usuario', 'janela_ate', 'gratis_ate', 'sdr_id', 'pontos', 'email_optout', 'ultima_visita', 'chat_id'],
   Funis: ['id', 'nome', 'ordem'],
   Etapas: ['id', 'funil_id', 'nome', 'cor', 'ordem', 'tipo'],
   Negocios: ['id', 'titulo', 'contato_id', 'funil_id', 'etapa_id', 'valor', 'responsavel_id', 'status', 'motivo_perda', 'previsao', 'notas',
@@ -31,6 +31,8 @@ var PRUMO_ESQUEMA = {
   Grupos: ['id', 'nome', 'jid', 'link', 'slug', 'limite', 'cliques', 'ordem', 'ativo', 'criado_em'],
   Historico: ['id', 'data', 'contato_id', 'negocio_id', 'usuario_nome', 'acao', 'detalhe', 'ref_id'],
   Arquivos: ['id', 'mes', 'planilha_id', 'url', 'linhas', 'criado_em', 'atualizado_em'],
+  Cobrancas: ['id', 'tipo', 'ref_id', 'contato_id', 'negocio_id', 'descricao', 'valor', 'vencimento', 'status', 'pago_em', 'forma', 'parcela', 'parcelas', 'link', 'mp_id',
+    'origem', 'lembrete_em', 'atraso_avisado', 'reembolsado_em', 'reembolso_valor', 'criado_em', 'atualizado_em'],
   Config: ['chave', 'valor']
 };
 
@@ -97,6 +99,14 @@ var PRUMO_CONFIG_PADRAO = {
   EMAIL_CONTAGEM: '',           // AAAA-MM-DD|gmail|brevo (enviados hoje)
   SITE_URL: '',                 // endereço do site do sistema (GitHub Pages), usado nos links rastreados
   RASTREIO_SEGREDO: '',
+  // Financeiro e Mercado Pago
+  MP_TOKEN: '', MP_CHAVE: '', MP_RETORNO: '',
+  LEMBRETE_COBRANCA_DIAS: '3',  // quantos dias antes do vencimento dispara o gatilho "cobrança perto de vencer"
+  FIN_VERIFICADO: '',
+  // Chat do site
+  CHAT_ATIVO: 'NAO', CHAT_TITULO: 'Fale com a gente', CHAT_SAUDACAO: 'Oi! Deixe seu nome e WhatsApp e já te respondemos por aqui.', CHAT_PEDIR: 'nome, whatsapp',
+  // Plano de suporte (código que vem com a compra)
+  SUPORTE_CODIGO: '',
   // Arquivo mensal no Google Drive
   ARQUIVO_AUTO: 'SIM', ARQUIVO_FEITO: '', ARQUIVO_PASTA: '',
   PROX_TRABALHO: ''
@@ -183,7 +193,7 @@ function PrumoLogica(P) {
 
   /* ======================================================== autenticação */
   function publicoUsuario(u) {
-    return { id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, ativo: u.ativo, recebe_leads: u.recebe_leads, cor: u.cor, ultimo_acesso: u.ultimo_acesso, meta_valor: u.meta_valor || '', meta_reunioes: u.meta_reunioes || '' };
+    return { id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, ativo: u.ativo, recebe_leads: u.recebe_leads, cor: u.cor, ultimo_acesso: u.ultimo_acesso, meta_valor: u.meta_valor || '', meta_reunioes: u.meta_reunioes || '', permissoes: u.permissoes || '' };
   }
 
   function login(email, senha) {
@@ -224,10 +234,25 @@ function PrumoLogica(P) {
     gestor: { excluir: 1, disparos: 1, automacoes: 1, todos: 1, relatorios: 1, passar: 1 },
     sdr: { passar: 1, fila: 1 },
     closer: {},
-    atendente: { passar: 1, fila: 1 }
+    atendente: { passar: 1, fila: 1 },
+    personalizado: {}
   };
+  PERM.admin.financeiro = 1; PERM.gestor.financeiro = 1;
   var PERFIS = Object.keys(PERM);
-  function pode(user, area) { return !!(PERM[user.perfil] || {})[area]; }
+  /** Áreas que dá para liberar uma a uma no perfil "personalizado" (gestor de tráfego, marketing, financeiro...). */
+  var AREAS = {
+    todos: 'Ver todos os contatos e negócios', fila: 'Atender leads sem dono', passar: 'Passar leads para closer',
+    disparos: 'Disparos de WhatsApp e e-mail marketing', automacoes: 'Automações', relatorios: 'Relatórios',
+    financeiro: 'Financeiro (cobranças e recebimentos)', integracoes: 'Integrações', ajustes: 'Ajustes do sistema',
+    excluir: 'Excluir registros', equipe: 'Equipe (criar contas)'
+  };
+  function permissoesDe(user) {
+    if (user.perfil !== 'personalizado') return PERM[user.perfil] || {};
+    var o = {};
+    U.lista(user.permissoes).forEach(function (k) { if (AREAS[k]) o[k] = 1; });
+    return o;
+  }
+  function pode(user, area) { return !!permissoesDe(user)[area]; }
   function exige(user, area) { if (!pode(user, area)) throw new Error('Seu perfil não tem acesso a esta área.'); }
   function veTodos(user) { return pode(user, 'todos') || cfg().ATENDENTE_VE_TODOS === 'SIM'; }
   function podeContato(user, c) {
@@ -364,6 +389,7 @@ function PrumoLogica(P) {
     return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
   }
   /** Troca {variaveis} e sorteia {opção A|opção B} (spintax, ajuda a variar disparos). */
+  var ctxVars = null; // variáveis da execução de automação em andamento (ex.: dados da cobrança)
   function montarTexto(texto, c, user, extra) {
     c = c || {};
     var cp = camposDe(c);
@@ -373,6 +399,11 @@ function PrumoLogica(P) {
       minha_empresa: cfg().NOME, saudacao: saudacao(), data: P.agora().slice(0, 10).split('-').reverse().join('/')
     };
     if (extra) Object.keys(extra).forEach(function (k) { v[k] = extra[k]; });
+    if (ctxVars) Object.keys(ctxVars).forEach(function (k) { if (!(k in v)) v[k] = ctxVars[k]; });
+    if (c.id && !('valor_parcela' in v) && ['valor_parcela', 'vencimento', 'link_pagamento', 'parcela', 'descricao_cobranca'].some(function (x) { return U.str(texto).indexOf('{' + x + '}') >= 0; })) {
+      var fv = FIN.vars(FIN.proximaDoContato(c));
+      Object.keys(fv).forEach(function (k) { v[k] = fv[k]; });
+    }
     Object.keys(cp).forEach(function (k) { if (!(k in v)) v[k] = cp[k]; });
     var s = U.str(texto).replace(/\{([^{}|]+\|[^{}]*)\}/g, function (m, op) {
       var ops = op.split('|');
@@ -392,6 +423,7 @@ function PrumoLogica(P) {
   WA.base = function (u) { return U.str(u).trim().replace(/\/+$/, ''); };
 
   function req(url, metodo, corpo, cab, servico) {
+    contarHttp();
     var r = P.http(url, { method: metodo || 'get', headers: cab || {}, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
     var dados = U.json(r.text, null);
     if (r.code >= 300) {
@@ -689,7 +721,7 @@ function PrumoLogica(P) {
     return reg;
   }
 
-  function canalDe(c) { return c.canal === 'instagram' || (!c.telefone && c.ig_id) ? 'instagram' : 'whatsapp'; }
+  function canalDe(c) { return c.canal === 'site' ? 'site' : c.canal === 'instagram' || (!c.telefone && c.ig_id) ? 'instagram' : 'whatsapp'; }
   /** Janela de atendimento de 24h (API oficial): aberta quando o contato escreveu nas últimas 24h. */
   function janelaAte(c) {
     if (c.janela_ate) return c.janela_ate;
@@ -706,6 +738,11 @@ function PrumoLogica(P) {
     var canal = canalDe(c);
     var reg = { direcao: 'out', texto: texto, tipo: opc.midia_url ? ({ image: 'imagem', video: 'video', audio: 'audio', document: 'documento' }[opc.midia_tipo] || 'imagem') : 'texto', midia_url: opc.midia_url || '', usuario_id: opc.user ? opc.user.id : '', origem: opc.origem || 'manual', canal: canal };
     if (opc.metaModelo && opc.metaModelo.nome && !texto) reg.texto = '[modelo ' + opc.metaModelo.nome + ']';
+    if (canal === 'site') { // a resposta fica guardada e a janela de chat do site busca
+      reg.status = 'enviada';
+      registrarMsg(c, reg);
+      return { ok: true };
+    }
     if (canal === 'instagram') {
       try {
         if (!opc.comentario_id && !janelaAberta(c)) throw new Error('O Instagram só deixa responder até 24 horas depois da última mensagem do contato.');
@@ -748,8 +785,8 @@ function PrumoLogica(P) {
 
   /** Mensagem que chegou pelo webhook do WhatsApp. */
   function receber(m) {
-    var ehIg = m.canal === 'instagram';
-    if (!m.telefone && !(ehIg && m.ig_id)) return null;
+    var ehIg = m.canal === 'instagram', ehSite = m.canal === 'site';
+    if (!m.telefone && !(ehIg && m.ig_id) && !(ehSite && m.contato_id)) return null;
     if (m.wa_id && P.cache.get('wa_' + m.wa_id)) return null; // eco de algo que o próprio sistema enviou
     if (m.wa_id) P.cache.put('wa_' + m.wa_id, '1', 3600);
     var dados = ehIg ? { ig_id: m.ig_id, ig_usuario: m.ig_usuario, origem: 'Instagram', canal: 'instagram' } : { telefone: m.telefone, nome: m.deMim ? '' : m.nome, origem: m.anuncio ? 'Anúncio (WhatsApp)' : 'WhatsApp' };
@@ -758,9 +795,10 @@ function PrumoLogica(P) {
       dados.ig_usuario = dados.ig_usuario || pf.usuario;
       dados.nome = pf.nome || (dados.ig_usuario ? '@' + dados.ig_usuario : '');
     }
-    var r = gravarContato(dados, null, { naoSobrescrever: true, silencioso: true, semGatilhos: true });
+    var r = ehSite ? { contato: contatoPorId(m.contato_id), novo: !!m.primeira } : gravarContato(dados, null, { naoSobrescrever: true, silencioso: true, semGatilhos: true });
+    if (!r.contato) return null;
     var c = r.contato;
-    if (r.novo) hist(c.id, '', null, 'contato_criado', ehIg ? 'Chegou pelo Instagram' : m.anuncio ? 'Chegou por anúncio: ' + (m.anuncio.titulo || m.anuncio.id) : 'Chegou pelo WhatsApp');
+    if (r.novo && !ehSite) hist(c.id, '', null, 'contato_criado', ehIg ? 'Chegou pelo Instagram' : m.anuncio ? 'Chegou por anúncio: ' + (m.anuncio.titulo || m.anuncio.id) : 'Chegou pelo WhatsApp');
     if (m.deMim) { // enviada pelo celular da empresa (ou pelo app do Instagram)
       registrarMsg(c, { direcao: 'out', texto: m.texto, tipo: m.tipo, status: 'enviada', origem: 'celular', wa_id: m.wa_id, canal: m.canal });
       pausarRobo(c);
@@ -774,6 +812,8 @@ function PrumoLogica(P) {
       return c;
     }
     var mud = { janela_ate: U.somaTempo(P.agora(), 1440) };
+    if (ehSite && c.canal !== 'site') mud.canal = 'site';
+    else if (!ehSite && !ehIg && c.canal === 'site') mud.canal = 'whatsapp'; // voltou a falar pelo WhatsApp
     if (m.anuncio && usaMeta()) { // clique em anúncio para o WhatsApp: mensagens grátis por um período
       mud.gratis_ate = U.somaTempo(P.agora(), (U.num(cfg().META_GRATIS_HORAS) || 72) * 60);
       var cpA = camposDe(c); cpA.anuncio = m.anuncio.titulo || m.anuncio.id; cpA.anuncio_id = m.anuncio.id; mud.campos = JSON.stringify(cpA);
@@ -876,6 +916,7 @@ function PrumoLogica(P) {
     if (!passos.length) return null;
     var dadosEx = {};
     if (info && info.comentario_id) dadosEx.comentario_id = info.comentario_id;
+    if (info && info.cobranca_id) dadosEx.cobranca_id = info.cobranca_id;
     var ex = { id: P.id('E'), automacao_id: a.id, contato_id: c.id, passo_id: passos[0].id, status: 'rodando', acordar_em: '', tentativas: '0', criado_em: P.agora(), atualizado_em: P.agora(), dados: JSON.stringify(dadosEx) };
     P.inserir('Execucoes', ex);
     P.atualizar('Automacoes', a.id, { disparos: String(U.num(a.disparos) + 1) });
@@ -894,6 +935,7 @@ function PrumoLogica(P) {
 
   function proximoId(passos, atualId) {
     var i = passos.findIndex(function (s) { return s.id === atualId; });
+    if (i >= 0 && passos[i].prox) return passos[i].prox; // ligação feita no construtor visual
     return i >= 0 && i + 1 < passos.length ? passos[i + 1].id : 'fim';
   }
 
@@ -941,6 +983,12 @@ function PrumoLogica(P) {
 
   /** Executa passos até precisar esperar (tempo ou resposta) ou terminar. */
   function rodar(ex, c, a) {
+    var antes = ctxVars;
+    var d = U.json(ex.dados, {}) || {};
+    ctxVars = d.cobranca_id ? FIN.vars(FIN.porId(d.cobranca_id)) : null;
+    try { return rodarPassos(ex, c, a); } finally { ctxVars = antes; }
+  }
+  function rodarPassos(ex, c, a) {
     var passos = passosDe(a);
     var atual = ex.passo_id;
     var limite = 25, enviadas = 0;
@@ -1324,6 +1372,7 @@ function PrumoLogica(P) {
     if (P.arquivo && k0.ARQUIVO_AUTO === 'SIM' && U.str(k0.ARQUIVO_FEITO) < mesAtual() && (Number(agora.slice(11, 13)) < 6 || Number(agora.slice(8, 10)) >= 3)) {
       try { arquivar(null, 20000); } catch (e) { hist('', '', null, 'arquivo_erro', e.message); }
     }
+    try { FIN.verificarDia(); } catch (e) { hist('', '', null, 'automacao_erro', 'Financeiro: ' + e.message); }
     var prox = cfg().PROX_TRABALHO;
     if (prox && prox > agora) return { pulou: true };
     var enviados = 0, erros = 0, acordadas = 0;
@@ -1743,6 +1792,340 @@ function PrumoLogica(P) {
     throw new Error('Rastreio desconhecido.');
   }
 
+  /* ========================================================= financeiro */
+  // Cobranças: cada parcela de uma venda é uma linha. Pagas = faturamento real (entradas);
+  // pendentes = valor a receber no futuro; pendentes vencidas = inadimplência.
+  var FIN = {};
+  FIN.hoje = function () { return P.agora().slice(0, 10); };
+  FIN.atrasada = function (x) { return x.status === 'pendente' && x.vencimento && x.vencimento < FIN.hoje(); };
+  FIN.brl = function (v) { var n = U.num(v); var s = n.toFixed(2).split('.'); return 'R$ ' + s[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + s[1]; };
+  FIN.data = function (d) { d = U.str(d); return d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4); };
+  FIN.somaMes = function (dia, n) {
+    var a = Number(dia.slice(0, 4)), m = Number(dia.slice(5, 7)) - 1 + n, d = Number(dia.slice(8, 10));
+    a += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+    var ult = new Date(a, m + 1, 0).getDate();
+    return a + '-' + ('0' + (m + 1)).slice(-2) + '-' + ('0' + Math.min(d, ult)).slice(-2);
+  };
+  FIN.porId = function (id) { return P.tabela('Cobrancas').filter(function (x) { return x.id === id; })[0] || null; };
+  /** Variáveis de cobrança para mensagens: {valor_parcela} {vencimento} {link_pagamento} {parcela} {descricao_cobranca} */
+  FIN.vars = function (cob) {
+    if (!cob) return {};
+    return { valor_parcela: FIN.brl(cob.valor), vencimento: FIN.data(cob.vencimento), link_pagamento: cob.link || '', parcela: cob.parcelas > 1 ? cob.parcela + '/' + cob.parcelas : cob.parcela + '/' + (cob.parcelas || 1), descricao_cobranca: cob.descricao };
+  };
+  FIN.proximaDoContato = function (c) {
+    return P.tabela('Cobrancas').filter(function (x) { return x.contato_id === c.id && x.status === 'pendente' && x.tipo !== 'link'; })
+      .sort(function (a, b) { return a.vencimento < b.vencimento ? -1 : 1; })[0] || null;
+  };
+
+  /** Cria as parcelas de uma venda. o: valor_total, parcelas, primeiro_vencimento, descricao, forma, negocio_id, entrada_paga, gerar_link */
+  FIN.criar = function (c, o, user) {
+    var total = U.num(o.valor_total), n = Math.max(1, Math.min(60, Math.floor(U.num(o.parcelas) || 1)));
+    if (total <= 0) throw new Error('Informe o valor.');
+    var venc1 = /^\d{4}-\d{2}-\d{2}$/.test(U.str(o.primeiro_vencimento)) ? o.primeiro_vencimento : FIN.hoje();
+    var base = Math.floor(total / n * 100) / 100, linhas = [];
+    for (var i = 0; i < n; i++) {
+      var v = i === n - 1 ? Math.round((total - base * (n - 1)) * 100) / 100 : base;
+      var paga = i === 0 && o.entrada_paga;
+      linhas.push({
+        id: P.id('CB') + i, tipo: 'parcela', ref_id: '', contato_id: c ? c.id : '', negocio_id: o.negocio_id || '', descricao: U.cap(o.descricao || 'Venda', 120),
+        valor: String(v), vencimento: FIN.somaMes(venc1, i), status: paga ? 'paga' : 'pendente', pago_em: paga ? P.agora() : '', forma: U.cap(o.forma, 40),
+        parcela: String(i + 1), parcelas: String(n), link: '', mp_id: '', origem: o.origem || 'manual', lembrete_em: '', atraso_avisado: '', reembolsado_em: '', reembolso_valor: '',
+        criado_em: P.agora(), atualizado_em: P.agora()
+      });
+    }
+    P.inserirVarios('Cobrancas', linhas);
+    if (c) {
+      hist(c.id, o.negocio_id || '', user, 'cobranca', n + 'x de ' + FIN.brl(base) + ' (' + FIN.brl(total) + ') - ' + (o.descricao || 'Venda'));
+      if (o.entrada_paga) FIN.depoisDePagar(c, linhas[0], user);
+    }
+    if (o.gerar_link && cfg().MP_TOKEN) linhas.forEach(function (x) { if (x.status === 'pendente') { try { FIN.gerarLink(x, c); } catch (e) { hist(c ? c.id : '', '', null, 'integracao', 'Mercado Pago: ' + e.message); } } });
+    return linhas;
+  };
+  FIN.depoisDePagar = function (c, cob, user) {
+    if (!c) return;
+    if (c.status !== 'cliente') { P.atualizar('Contatos', c.id, { status: 'cliente', atualizado_em: P.agora() }); c.status = 'cliente'; }
+    if (!P.tabela('Cobrancas').some(function (x) { return x.contato_id === c.id && FIN.atrasada(x); })) remTag(c, 'Inadimplente', null);
+    hist(c.id, cob.negocio_id, user, 'pagamento', FIN.brl(cob.valor) + ' - ' + cob.descricao + ' (parcela ' + cob.parcela + '/' + cob.parcelas + ')', cob.id);
+    saida('cobranca.paga', { contato: contatoPublico(c), cobranca: cob });
+    gatilho('pagamento', c, { cobranca_id: cob.id });
+  };
+  FIN.pagar = function (cob, o, user) {
+    if (cob.status === 'paga') return cob;
+    if (cob.status !== 'pendente') throw new Error('Esta cobrança está ' + cob.status + '.');
+    var mud = { status: 'paga', pago_em: o && o.pago_em ? U.str(o.pago_em).slice(0, 10) + 'T12:00:00' : P.agora(), forma: U.cap((o && o.forma) || cob.forma, 40), atualizado_em: P.agora() };
+    if (o && o.mp_id) mud.mp_id = o.mp_id;
+    P.atualizar('Cobrancas', cob.id, mud);
+    Object.keys(mud).forEach(function (k) { cob[k] = mud[k]; });
+    FIN.depoisDePagar(contatoPorId(cob.contato_id), cob, user);
+    return cob;
+  };
+  FIN.reembolsar = function (cob, o, user) {
+    if (cob.status !== 'paga') throw new Error('Só dá para reembolsar uma cobrança paga.');
+    var valor = U.num(o && o.valor) || U.num(cob.valor);
+    var mud = { status: 'reembolsada', reembolsado_em: P.agora(), reembolso_valor: String(Math.min(valor, U.num(cob.valor))), atualizado_em: P.agora() };
+    P.atualizar('Cobrancas', cob.id, mud);
+    Object.keys(mud).forEach(function (k) { cob[k] = mud[k]; });
+    var c = contatoPorId(cob.contato_id);
+    if (c) {
+      addTag(c, 'Reembolso', null);
+      hist(c.id, cob.negocio_id, user, 'reembolso', FIN.brl(mud.reembolso_valor) + ' - ' + cob.descricao + (o && o.motivo ? ' (' + U.cap(o.motivo, 200) + ')' : ''), cob.id);
+      saida('cobranca.reembolsada', { contato: contatoPublico(c), cobranca: cob });
+      gatilho('reembolso', c, { cobranca_id: cob.id });
+    }
+    return cob;
+  };
+
+  /** Uma vez por dia: avisa o que está perto de vencer e marca quem atrasou (tag Inadimplente). */
+  FIN.verificarDia = function () {
+    var hoje = FIN.hoje();
+    if (cfg().FIN_VERIFICADO === hoje) return 0;
+    salvarCfg({ FIN_VERIFICADO: hoje });
+    var dias = U.num(cfg().LEMBRETE_COBRANCA_DIAS) || 3, limite = U.somaTempo(hoje + 'T00:00:00', dias * 1440).slice(0, 10), n = 0, mud = {};
+    P.tabela('Cobrancas').forEach(function (x) {
+      if (x.status !== 'pendente' || x.tipo === 'link' || !x.contato_id) return;
+      var c = contatoPorId(x.contato_id);
+      if (!c) return;
+      if (x.vencimento < hoje && !x.atraso_avisado) {
+        mud[x.id] = { atraso_avisado: P.agora() };
+        addTag(c, 'Inadimplente', null);
+        hist(c.id, x.negocio_id, null, 'atraso', FIN.brl(x.valor) + ' venceu em ' + FIN.data(x.vencimento), x.id);
+        saida('cobranca.atrasada', { contato: contatoPublico(c), cobranca: x });
+        gatilho('cobranca_atrasada', c, { cobranca_id: x.id }); n++;
+      } else if (x.vencimento >= hoje && x.vencimento <= limite && !x.lembrete_em) {
+        mud[x.id] = { lembrete_em: P.agora() };
+        gatilho('cobranca_vencendo', c, { cobranca_id: x.id }); n++;
+      }
+    });
+    P.atualizarVarios('Cobrancas', mud);
+    return n;
+  };
+
+  /** Painel financeiro de um mês (AAAA-MM). */
+  FIN.resumo = function (mes) {
+    mes = /^\d{4}-\d{2}$/.test(U.str(mes)) ? mes : FIN.hoje().slice(0, 7);
+    var hoje = FIN.hoje(), em7 = U.somaTempo(hoje + 'T00:00:00', 7 * 1440).slice(0, 10);
+    var r = { mes: mes, recebido: 0, recebido_qtd: 0, reembolsos: 0, reembolsos_qtd: 0, a_receber: 0, a_receber_mes: 0, atraso: 0, atraso_qtd: 0, inadimplentes: 0, vencendo7: 0, vencendo7_qtd: 0, previsao: {}, historico: {}, formas: {} };
+    var devedores = {};
+    for (var k = -5; k <= 0; k++) r.historico[FIN.somaMes(mes + '-01', k).slice(0, 7)] = 0;
+    for (var j = 0; j < 12; j++) r.previsao[FIN.somaMes(hoje.slice(0, 7) + '-01', j).slice(0, 7)] = 0;
+    P.tabela('Cobrancas').forEach(function (x) {
+      if (x.tipo === 'link') return;
+      var v = U.num(x.valor);
+      if (x.status === 'paga' || x.status === 'reembolsada') {
+        var pm = U.str(x.pago_em).slice(0, 7);
+        if (pm === mes) { r.recebido += v; r.recebido_qtd++; r.formas[x.forma || 'Não informado'] = (r.formas[x.forma || 'Não informado'] || 0) + v; }
+        if (pm in r.historico) r.historico[pm] += v;
+      }
+      if (x.status === 'reembolsada' && U.str(x.reembolsado_em).slice(0, 7) === mes) { r.reembolsos += U.num(x.reembolso_valor) || v; r.reembolsos_qtd++; }
+      if (x.status === 'pendente') {
+        r.a_receber += v;
+        if (x.vencimento.slice(0, 7) === mes) r.a_receber_mes += v;
+        if (x.vencimento < hoje) { r.atraso += v; r.atraso_qtd++; devedores[x.contato_id] = 1; }
+        else if (x.vencimento <= em7) { r.vencendo7 += v; r.vencendo7_qtd++; }
+        var vm = x.vencimento.slice(0, 7);
+        if (vm in r.previsao) r.previsao[vm] += v;
+      }
+    });
+    r.inadimplentes = Object.keys(devedores).length;
+    r.liquido = r.recebido - r.reembolsos;
+    var cs = P.tabela('Contatos');
+    r.clientes = cs.filter(function (c) { return c.status === 'cliente'; }).length;
+    r.base = cs.length;
+    return r;
+  };
+
+  /* ---------------------------------------------------- Mercado Pago */
+  FIN.mpReq = function (url, metodo, corpo) {
+    var tk = cfg().MP_TOKEN;
+    if (!tk) throw new Error('Mercado Pago não configurado (Integrações > Mercado Pago).');
+    return req('https://api.mercadopago.com' + url, metodo, corpo, { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json', 'X-Idempotency-Key': P.uuid() }, 'Mercado Pago');
+  };
+  FIN.urlNotificacao = function () { return P.urlApp() + '?src=mp&k=' + encodeURIComponent(cfg().MP_CHAVE); };
+  /** Link de pagamento (Checkout Pro) para uma cobrança ou para um link de venda reutilizável. */
+  FIN.gerarLink = function (cob, c) {
+    var titulo = cob.descricao + (U.num(cob.parcelas) > 1 ? ' (parcela ' + cob.parcela + '/' + cob.parcelas + ')' : '');
+    var corpo = {
+      items: [{ id: cob.id, title: U.cap(titulo, 120), quantity: 1, unit_price: Math.round(U.num(cob.valor) * 100) / 100, currency_id: 'BRL' }],
+      external_reference: cob.id, notification_url: FIN.urlNotificacao(), statement_descriptor: U.cap(cfg().NOME, 22)
+    };
+    if (c && U.emailOk(c.email)) corpo.payer = { email: c.email, name: U.primeiroNome(c.nome) };
+    if (cfg().MP_RETORNO) corpo.back_urls = { success: cfg().MP_RETORNO, pending: cfg().MP_RETORNO, failure: cfg().MP_RETORNO };
+    if (cob.tipo !== 'link' && cob.vencimento) corpo.date_of_expiration = U.somaTempo(cob.vencimento + 'T23:59:00', 30 * 1440) + '.000-03:00';
+    var r = FIN.mpReq('/checkout/preferences', 'post', corpo);
+    var link = r && (r.init_point || r.sandbox_init_point);
+    if (!link) throw new Error('O Mercado Pago não devolveu o link.');
+    P.atualizar('Cobrancas', cob.id, { link: link, atualizado_em: P.agora() });
+    cob.link = link;
+    return link;
+  };
+  /** Notificação do Mercado Pago: confere o pagamento direto na API (não confia no que chegou). */
+  FIN.notificacao = function (p, body) {
+    var tipo = U.str((body && (body.type || body.topic)) || p.type || p.topic);
+    var id = U.str((body && body.data && body.data.id) || p['data.id'] || p.id);
+    if (!/payment/.test(tipo) || !/^\d+$/.test(id)) return { ok: true, ignorado: true };
+    var pg = FIN.mpReq('/v1/payments/' + id, 'get');
+    var ref = U.str(pg.external_reference);
+    var cob = FIN.porId(ref);
+    if (!cob) return { ok: true, ignorado: true };
+    var st = U.str(pg.status);
+    var ja = P.tabela('Cobrancas').filter(function (x) { return x.mp_id === id; })[0];
+    if (st === 'approved') {
+      if (cob.tipo === 'link') { // link reutilizável: cada pagamento vira uma entrada nova com o comprador
+        if (ja) return { ok: true, repetido: true };
+        var pay = pg.payer || {};
+        var nome = ((pay.first_name || '') + ' ' + (pay.last_name || '')).trim();
+        var tel = pay.phone && pay.phone.number ? U.dig(U.str(pay.phone.area_code) + U.str(pay.phone.number)) : '';
+        var c = null;
+        if (U.emailOk(pay.email) || tel) c = gravarContato({ nome: nome, email: pay.email, telefone: tel, origem: 'Mercado Pago', tags: ['Comprou: ' + cob.descricao] }, null, {}).contato;
+        var nova = FIN.criar(c, { valor_total: pg.transaction_amount || cob.valor, parcelas: 1, descricao: cob.descricao, forma: pg.payment_method_id || 'Mercado Pago', origem: 'Mercado Pago' }, null)[0];
+        FIN.pagar(nova, { mp_id: id, forma: pg.payment_method_id }, null);
+        P.atualizar('Cobrancas', cob.id, { parcela: String(U.num(cob.parcela) + 1), atualizado_em: P.agora() }); // contador de vendas do link
+        if (c) { gatilho('evento', c, { evento: 'compra_aprovada', produto: cob.descricao }); saida('compra.compra_aprovada', { contato: contatoPublico(c), produto: cob.descricao, valor: pg.transaction_amount, plataforma: 'Mercado Pago' }); }
+        return { ok: true, nova: nova.id };
+      }
+      FIN.pagar(cob, { mp_id: id, forma: pg.payment_method_id || 'Mercado Pago' }, null);
+      return { ok: true, paga: cob.id };
+    }
+    if (st === 'refunded' || st === 'charged_back') {
+      var alvo = ja || (cob.status === 'paga' ? cob : null);
+      if (alvo && alvo.status === 'paga') FIN.reembolsar(alvo, { motivo: st === 'charged_back' ? 'Chargeback no Mercado Pago' : 'Reembolso no Mercado Pago' }, null);
+      return { ok: true, reembolso: true };
+    }
+    return { ok: true, status: st };
+  };
+
+  /* ===================================================== chat do site */
+  // Janela de chat para colar no site: o visitante deixa nome e contato antes de começar,
+  // a conversa cai na caixa de Conversas (canal "site") e a equipe responde por lá.
+  var CHAT = {};
+  CHAT.token = function (v) { return EM.assinar('chat' + v); };
+  CHAT.confere = function (b) {
+    var ce = cfg().ENTRADA_CHAVE || cfg().WEBHOOK_CHAVE;
+    if (!b.k || b.k !== ce) throw new Error('Chat não autorizado.');
+    if (cfg().CHAT_ATIVO !== 'SIM') throw new Error('O chat está desligado.');
+    if (!/^[\w-]{12,40}$/.test(U.str(b.v))) throw new Error('Visitante inválido.');
+  };
+  CHAT.contato = function (b) {
+    if (b.t !== CHAT.token(b.v)) throw new Error('Sessão do chat inválida.');
+    var c = P.tabela('Contatos').filter(function (x) { return x.chat_id === b.v; })[0];
+    if (!c) throw new Error('Conversa não encontrada.');
+    return c;
+  };
+  CHAT.limite = function (v) {
+    var k = 'chatlim_' + v, n = Number(P.cache.get(k) || 0);
+    if (n > 20) throw new Error('Muitas mensagens seguidas. Espere um minuto.');
+    P.cache.put(k, String(n + 1), 60);
+  };
+  CHAT.config = function () {
+    var k = cfg();
+    return { ativo: k.CHAT_ATIVO === 'SIM', titulo: k.CHAT_TITULO, saudacao: k.CHAT_SAUDACAO, pedir: U.lista(k.CHAT_PEDIR), cor: k.COR_PRIMARIA, nome: k.NOME, logo: /^https:/.test(U.str(k.LOGO_URL)) ? k.LOGO_URL : '' };
+  };
+  CHAT.iniciar = function (b) {
+    CHAT.confere(b); CHAT.limite(b.v);
+    var pedir = U.lista(cfg().CHAT_PEDIR);
+    var email = U.str(b.email).trim(), tel = U.telWa(b.telefone);
+    if (pedir.indexOf('nome') >= 0 && !U.str(b.nome).trim()) throw new Error('Informe seu nome.');
+    if (pedir.indexOf('email') >= 0 && !U.emailOk(email)) throw new Error('Informe um e-mail válido.');
+    if (pedir.indexOf('whatsapp') >= 0 && U.dig(tel).length < 12) throw new Error('Informe o WhatsApp com DDD.');
+    var c = P.tabela('Contatos').filter(function (x) { return x.chat_id === b.v; })[0];
+    var novo = false;
+    if (!c) {
+      var r = gravarContato({ nome: U.cap(b.nome, 80) || 'Visitante do site', email: email, telefone: tel, origem: 'Chat do site', canal: 'site' }, null, { naoSobrescrever: true, silencioso: true, semGatilhos: true });
+      c = r.contato; novo = r.novo;
+      P.atualizar('Contatos', c.id, { chat_id: b.v, canal: 'site', atualizado_em: P.agora() });
+      c.chat_id = b.v; c.canal = 'site';
+      hist(c.id, '', null, novo ? 'contato_criado' : 'chat', 'Iniciou conversa pelo chat do site' + (b.pagina ? ': ' + U.cap(b.pagina, 200) : ''));
+      if (novo) gatilho('novo_contato', c, { origem: 'Chat do site' });
+    }
+    return { t: CHAT.token(b.v), nome: U.primeiroNome(c.nome) };
+  };
+  CHAT.enviar = function (b) {
+    CHAT.confere(b); CHAT.limite(b.v);
+    var c = CHAT.contato(b);
+    var texto = U.cap(U.str(b.texto).trim(), 2000);
+    if (!texto) throw new Error('Escreva uma mensagem.');
+    var primeira = !P.filtrar('Mensagens', 'contato_id', c.id).some(function (m) { return m.direcao === 'in' && m.canal === 'site'; });
+    receber({ canal: 'site', contato_id: c.id, texto: texto, tipo: 'texto', wa_id: 'site_' + P.uuid(), primeira: primeira });
+    return { ok: true };
+  };
+  CHAT.receber = function (b) {
+    CHAT.confere(b);
+    var c = CHAT.contato(b);
+    var desde = U.str(b.desde);
+    var us = {};
+    P.tabela('Usuarios').forEach(function (u) { us[u.id] = U.primeiroNome(u.nome); });
+    return {
+      agora: P.agora(),
+      mensagens: P.filtrar('Mensagens', 'contato_id', c.id).filter(function (m) { return m.canal === 'site' && (!desde || m.criado_em > desde) && m.status !== 'erro'; })
+        .map(function (m) { return { de: m.direcao === 'in' ? 'eu' : (m.origem === 'robo' ? 'robo' : 'equipe'), autor: us[m.usuario_id] || '', texto: m.texto, em: m.criado_em }; })
+    };
+  };
+
+  /* ===================================================== limites e uso */
+  function contarHttp() {
+    var k = 'http_' + P.agora().slice(0, 10), n = Number(P.cache.get(k) || 0) + 1;
+    P.cache.put(k, String(n), 21600);
+  }
+  function limites() {
+    var k = cfg(), hoje = P.agora().slice(0, 10);
+    var uso = P.uso ? P.uso() : null;
+    var cs = P.tabela('Contatos'), msgs = P.tabela('Mensagens');
+    var disparosHoje = P.tabela('Fila').filter(function (f) { return f.tipo === 'campanha' && f.status === 'enviado' && U.str(f.enviado_em).slice(0, 10) === hoje; }).length;
+    var capContatos = uso ? Math.max(0, Math.floor((uso.limite - uso.celulas) / (PRUMO_ESQUEMA.Contatos.length + 6))) : null;
+    return {
+      planilha: uso, usuarios: P.tabela('Usuarios').filter(function (u) { return u.ativo === 'SIM'; }).length,
+      contatos: cs.length, contatos_capacidade: capContatos, mensagens_mes: msgs.length, disparos_hoje: disparosHoje,
+      email: EM.cota(), chamadas_hoje: Number(P.cache.get('http_' + hoje) || 0), provedor: WA.provedor(), instagram: IG.ativo(),
+      arquivo: { feito: k.ARQUIVO_FEITO, auto: k.ARQUIVO_AUTO }, workspace: U.num(k.EMAIL_LIMITE_GMAIL) > 200
+    };
+  }
+
+  /* ============================================== plano de suporte */
+  // O código de suporte vem com a compra: diz o plano, até quando vale e o contato do suporte.
+  // O sistema funciona do mesmo jeito com ou sem suporte ativo; o código só informa.
+  var SUP = {};
+  SUP.soma = function (s) { var h = 2166136261; s = 'prumo-suporte|' + s; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return ('0000000' + h.toString(16)).slice(-8); };
+  SUP.b64 = function (s, ida) {
+    var A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    if (ida) {
+      var bytes = unescape(encodeURIComponent(s)), o = '';
+      for (var i = 0; i < bytes.length; i += 3) {
+        var a = bytes.charCodeAt(i), b = bytes.charCodeAt(i + 1), c = bytes.charCodeAt(i + 2), n = (a << 16) | ((b || 0) << 8) | (c || 0);
+        o += A[(n >> 18) & 63] + A[(n >> 12) & 63] + (i + 1 < bytes.length ? A[(n >> 6) & 63] : '') + (i + 2 < bytes.length ? A[n & 63] : '');
+      }
+      return o;
+    }
+    var out = '', bits = 0, val = 0;
+    for (var j = 0; j < s.length; j++) {
+      var x = A.indexOf(s[j]);
+      if (x < 0) throw new Error('Código inválido.');
+      val = (val << 6) | x; bits += 6;
+      if (bits >= 8) { bits -= 8; out += String.fromCharCode((val >> bits) & 255); }
+    }
+    return decodeURIComponent(escape(out));
+  };
+  SUP.ler = function (codigo) {
+    codigo = U.str(codigo).trim().replace(/\s+/g, '');
+    var p = codigo.split('.');
+    if (p.length !== 2) throw new Error('Código de suporte inválido.');
+    var json = SUP.b64(p[0]);
+    if (SUP.soma(json) !== p[1]) throw new Error('Código de suporte inválido.');
+    var d = U.json(json, null);
+    if (!d || !d.p || !/^\d{4}-\d{2}-\d{2}$/.test(U.str(d.a))) throw new Error('Código de suporte inválido.');
+    return d;
+  };
+  SUP.PLANOS = { mensal: 'Essencial (1 mês de suporte)', anual: 'Anual (1 ano de suporte e atualizações)', cinco: 'Cinco anos (5 anos de suporte e atualizações)' };
+  SUP.estado = function () {
+    var cod = cfg().SUPORTE_CODIGO;
+    var hoje = P.agora().slice(0, 10);
+    if (!cod) return { tem: false, versao: PRUMO_VERSAO };
+    try {
+      var d = SUP.ler(cod);
+      var dias = Math.round((new Date(d.a + 'T12:00:00') - new Date(hoje + 'T12:00:00')) / 86400000);
+      return { tem: true, plano: d.p, nome_plano: SUP.PLANOS[d.p] || d.p, ate: d.a, cliente: d.n || '', contato: d.c || '', compra: d.d || '', dias: dias, ativo: dias >= 0, versao: PRUMO_VERSAO };
+    } catch (e) { return { tem: false, erro: e.message, versao: PRUMO_VERSAO }; }
+  };
+
   /* ===================================================== integrações */
   var INT = {};
   var EVENTO_ROTULO = { compra_aprovada: 'Comprou', carrinho_abandonado: 'Carrinho abandonado', boleto_gerado: 'Boleto gerado', pix_gerado: 'Pix gerado', reembolso: 'Reembolso', cancelado: 'Cancelou', recusado: 'Pagamento recusado' };
@@ -1789,6 +2172,14 @@ function PrumoLogica(P) {
       P.tabela('Automacoes').forEach(function (a) { var g = U.json(a.gatilho, {}) || {}; if (g.tipo === 'evento' && /carrinho|boleto|pix/.test(g.evento)) recup[a.id] = 1; });
       P.tabela('Execucoes').filter(function (e) { return e.contato_id === c.id && recup[e.automacao_id] && /esperando|rodando/.test(e.status); })
         .forEach(function (e) { P.atualizar('Execucoes', e.id, { status: 'cancelada', atualizado_em: P.agora() }); });
+    }
+    if (ev.evento === 'compra_aprovada' && ev.valor) {
+      var en = FIN.criar(c, { valor_total: ev.valor, parcelas: 1, descricao: ev.produto || 'Compra ' + ev.plataforma, forma: ev.plataforma, origem: ev.plataforma }, null)[0];
+      P.atualizar('Cobrancas', en.id, { status: 'paga', pago_em: P.agora() });
+    }
+    if (ev.evento === 'reembolso') {
+      var pg = P.tabela('Cobrancas').filter(function (x) { return x.contato_id === c.id && x.status === 'paga' && x.origem === ev.plataforma; }).sort(function (a, b) { return a.pago_em < b.pago_em ? 1 : -1; })[0];
+      if (pg) FIN.reembolsar(pg, { motivo: ev.plataforma }, null);
     }
     saida('compra.' + ev.evento, { contato: contatoPublico(c), produto: ev.produto, valor: ev.valor, plataforma: ev.plataforma });
     gatilho('evento', c, { evento: ev.evento, produto: ev.produto });
@@ -1840,9 +2231,10 @@ function PrumoLogica(P) {
   /** Ponto de entrada de tudo que chega de fora (webhooks). p = parâmetros da URL. */
   function receberWebhook(p, body) {
     var c = cfg();
-    var chave = p.src === 'wa' ? c.WEBHOOK_CHAVE : p.src === 'api' ? c.API_CHAVE : p.src === 'vendas' ? c.VENDAS_CHAVE : (c.ENTRADA_CHAVE || c.WEBHOOK_CHAVE);
+    var chave = p.src === 'wa' ? c.WEBHOOK_CHAVE : p.src === 'api' ? c.API_CHAVE : p.src === 'mp' ? c.MP_CHAVE : p.src === 'vendas' ? c.VENDAS_CHAVE : (c.ENTRADA_CHAVE || c.WEBHOOK_CHAVE);
     if (!chave || p.k !== chave) throw new Error('Chave do webhook inválida.');
     if (p.src === 'api') return apiExterna(body || {});
+    if (p.src === 'mp') return FIN.notificacao(p, body || {});
     if (p.src === 'wa') {
       var msgs = WA.ler(body);
       if (body && body.event && /connection[._]update/i.test(body.event)) {
@@ -2008,15 +2400,16 @@ function PrumoLogica(P) {
       campos: U.json(c.CAMPOS_PERSONALIZADOS, []) || [], tags: U.lista(c.TAGS), origens: U.lista(c.ORIGENS),
       horario: { inicio: c.HORARIO_INICIO, fim: c.HORARIO_FIM, dias: c.DIAS_ENVIO }, segmento: c.SEGMENTO,
       sla_minutos: U.num(c.SLA_MINUTOS), instagram: IG.ativo(), activecampaign: !!(c.AC_URL && c.AC_TOKEN), passar_etapa: c.PASSAR_ETAPA,
-      arquivo: !!P.arquivo, site_url: c.SITE_URL, email_provedor: c.EMAIL_PROVEDOR
+      arquivo: !!P.arquivo, site_url: c.SITE_URL, email_provedor: c.EMAIL_PROVEDOR, mercadopago: !!c.MP_TOKEN, chat: c.CHAT_ATIVO === 'SIM'
     };
   }
   function configAdmin() {
     var c = cfg();
     var o = {};
     Object.keys(PRUMO_CONFIG_PADRAO).forEach(function (k) { o[k] = c[k]; });
-    ['EVOLUTION_APIKEY', 'WAHA_APIKEY', 'META_TOKEN', 'IG_TOKEN', 'AC_TOKEN', 'BREVO_APIKEY'].forEach(function (k) { o[k] = c[k] ? '••••••••' + U.str(c[k]).slice(-4) : ''; });
-    delete o.API_CHAVE; delete o.RASTREIO_SEGREDO;
+    ['EVOLUTION_APIKEY', 'WAHA_APIKEY', 'META_TOKEN', 'IG_TOKEN', 'AC_TOKEN', 'BREVO_APIKEY', 'MP_TOKEN'].forEach(function (k) { o[k] = c[k] ? '••••••••' + U.str(c[k]).slice(-4) : ''; });
+    delete o.API_CHAVE; delete o.RASTREIO_SEGREDO; delete o.MP_CHAVE;
+    o.URL_WEBHOOK_MP = c.MP_CHAVE ? FIN.urlNotificacao() : '';
     o.URL_APP = P.urlApp();
     o.URL_WEBHOOK_WA = WA.urlWebhook();
     o.URL_WEBHOOK_ENTRADA = P.urlApp() + '?src=entrada&k=' + encodeURIComponent(c.ENTRADA_CHAVE || c.WEBHOOK_CHAVE);
@@ -2028,17 +2421,18 @@ function PrumoLogica(P) {
     return o;
   }
 
-  var CHAVES_EDITAVEIS = Object.keys(PRUMO_CONFIG_PADRAO).filter(function (k) { return ['PROX_TRABALHO', 'WEBHOOK_CHAVE', 'ENTRADA_CHAVE', 'API_CHAVE', 'VENDAS_CHAVE', 'ARQUIVO_FEITO', 'ARQUIVO_PASTA', 'EMAIL_CONTAGEM', 'RASTREIO_SEGREDO', 'SITE_URL'].indexOf(k) < 0; });
+  var CHAVES_EDITAVEIS = Object.keys(PRUMO_CONFIG_PADRAO).filter(function (k) { return ['PROX_TRABALHO', 'WEBHOOK_CHAVE', 'ENTRADA_CHAVE', 'API_CHAVE', 'VENDAS_CHAVE', 'ARQUIVO_FEITO', 'ARQUIVO_PASTA', 'EMAIL_CONTAGEM', 'RASTREIO_SEGREDO', 'SITE_URL', 'MP_CHAVE', 'FIN_VERIFICADO', 'SUPORTE_CODIGO'].indexOf(k) < 0; });
 
   function bootstrap(user) {
     var contatos = filtraContatosDoUsuario(user, P.tabela('Contatos'));
     var ids = {};
     contatos.forEach(function (c) { ids[c.id] = 1; });
     var negocios = P.tabela('Negocios').filter(function (n) { return veTodos(user) || ids[n.contato_id] || n.responsavel_id === user.id; });
-    var tarefas = P.tabela('Tarefas').filter(function (t) { return veTodos(user) || t.responsavel_id === user.id || ids[t.contato_id]; });
+    // tarefas são de cada pessoa; quem vê tudo pode filtrar por responsável na tela
+    var tarefas = P.tabela('Tarefas').filter(function (t) { return veTodos(user) || t.responsavel_id === user.id || (!t.responsavel_id && ids[t.contato_id]); });
     return {
       agora: P.agora(), usuario: publicoUsuario(user), config: configPublica(),
-      permissoes: PERM[user.perfil] || {},
+      permissoes: permissoesDe(user), areas: AREAS, suporte: SUP.estado(),
       usuarios: P.tabela('Usuarios').map(publicoUsuario),
       funis: funisCompletos(),
       contatos: contatos.map(contatoLeve), negocios: negocios, tarefas: tarefas,
@@ -2255,17 +2649,18 @@ function PrumoLogica(P) {
   R['email.salvar'] = function (u, b) {
     var d = b.email || {};
     exige(u, d.tipo === 'automacao' ? 'automacoes' : 'disparos');
+    var tipoE = ['automacao', 'modelo'].indexOf(d.tipo) >= 0 ? d.tipo : 'campanha';
     if (!U.str(d.nome).trim()) throw new Error('Dê um nome para o e-mail.');
     if (!U.str(d.assunto).trim()) throw new Error('Escreva o assunto.');
-    var reg = { nome: U.cap(d.nome, 100), tipo: d.tipo === 'automacao' ? 'automacao' : 'campanha', assunto: U.cap(d.assunto, 200), assunto_b: U.cap(d.assunto_b, 200), preheader: U.cap(d.preheader, 200),
+    var reg = { nome: U.cap(d.nome, 100), tipo: tipoE, assunto: U.cap(d.assunto, 200), assunto_b: U.cap(d.assunto_b, 200), preheader: U.cap(d.preheader, 200),
       blocos: JSON.stringify(blocosLimpos(d.blocos)), filtro: JSON.stringify(d.filtro || {}), agendar_em: d.agendar_em || '' };
     if (d.id) {
       var at = exigeEmail(d.id);
-      if (at.tipo !== 'automacao' && ['rascunho', 'agendada'].indexOf(at.status) < 0) throw new Error('Este e-mail já foi enviado e não pode ser editado. Use Duplicar.');
+      if (at.tipo === 'campanha' && ['rascunho', 'agendada'].indexOf(at.status) < 0) throw new Error('Este e-mail já foi enviado e não pode ser editado. Use Duplicar.');
       P.atualizar('Emails', d.id, reg);
       return exigeEmail(d.id);
     }
-    reg.id = P.id('EM'); reg.status = reg.tipo === 'automacao' ? 'ativo' : 'rascunho';
+    reg.id = P.id('EM'); reg.status = reg.tipo === 'automacao' ? 'ativo' : reg.tipo === 'modelo' ? 'modelo' : 'rascunho';
     ['total', 'enviados', 'aberturas', 'cliques', 'descadastros', 'erros', 'aberturas_b', 'enviados_b'].forEach(function (k) { reg[k] = '0'; });
     reg.criado_por = u.nome; reg.criado_em = P.agora();
     P.inserir('Emails', reg);
@@ -2342,6 +2737,74 @@ function PrumoLogica(P) {
     if (cfg().SITE_URL !== url) salvarCfg({ SITE_URL: url });
     return { ok: true };
   };
+
+  // ---- financeiro
+  function exigeCobranca(u, id, area) {
+    var x = FIN.porId(id);
+    if (!x) throw new Error('Cobrança não encontrada.');
+    if (!pode(u, 'financeiro')) { if (area === 'financeiro') exige(u, 'financeiro'); if (x.contato_id) exigeContato(u, x.contato_id); else exige(u, 'financeiro'); }
+    return x;
+  }
+  function cobrancaPublica(x, nomes) {
+    var o = {}; Object.keys(x).forEach(function (k) { o[k] = x[k]; });
+    o.contato_nome = nomes[x.contato_id] || '';
+    o.atrasada = FIN.atrasada(x);
+    return o;
+  }
+  R['financeiro.resumo'] = function (u, b) { exige(u, 'financeiro'); return FIN.resumo(b.mes); };
+  R['cobranca.listar'] = function (u, b) {
+    if (b.contato_id) exigeContato(u, b.contato_id); else exige(u, 'financeiro');
+    var nomes = {}, hoje = FIN.hoje(), em7 = U.somaTempo(hoje + 'T00:00:00', 7 * 1440).slice(0, 10);
+    P.tabela('Contatos').forEach(function (c) { nomes[c.id] = c.nome; });
+    var f = U.str(b.filtro || 'pendente');
+    return P.tabela('Cobrancas').filter(function (x) {
+      if (b.contato_id) return x.contato_id === b.contato_id && x.tipo !== 'link';
+      if (f === 'links') return x.tipo === 'link';
+      if (x.tipo === 'link') return false;
+      if (f === 'atraso') return FIN.atrasada(x);
+      if (f === 'vencendo') return x.status === 'pendente' && x.vencimento >= hoje && x.vencimento <= em7;
+      if (f === 'pendente') return x.status === 'pendente';
+      if (f === 'paga') return x.status === 'paga' && (!b.mes || U.str(x.pago_em).slice(0, 7) === b.mes);
+      if (f === 'reembolsada') return x.status === 'reembolsada';
+      return true;
+    }).sort(function (a, c2) { return (a.vencimento || a.criado_em) < (c2.vencimento || c2.criado_em) ? -1 : 1; }).slice(0, 1000).map(function (x) { return cobrancaPublica(x, nomes); });
+  };
+  R['cobranca.criar'] = function (u, b) {
+    var c = exigeContato(u, b.contato_id);
+    if (b.negocio_id) { var n = P.tabela('Negocios').filter(function (x) { return x.id === b.negocio_id; })[0]; if (!n || n.contato_id !== c.id) throw new Error('Negócio não encontrado.'); }
+    return FIN.criar(c, { valor_total: b.valor_total, parcelas: b.parcelas, primeiro_vencimento: b.primeiro_vencimento, descricao: b.descricao, forma: b.forma, negocio_id: b.negocio_id, entrada_paga: !!b.entrada_paga, gerar_link: !!b.gerar_link }, u);
+  };
+  R['cobranca.pagar'] = function (u, b) { return FIN.pagar(exigeCobranca(u, b.id), { pago_em: b.pago_em, forma: b.forma }, u); };
+  R['cobranca.reembolsar'] = function (u, b) { return FIN.reembolsar(exigeCobranca(u, b.id, 'financeiro'), { valor: b.valor, motivo: b.motivo }, u); };
+  R['cobranca.cancelar'] = function (u, b) {
+    var x = exigeCobranca(u, b.id, 'financeiro');
+    if (x.status !== 'pendente' && x.tipo !== 'link') throw new Error('Só dá para cancelar cobranças em aberto.');
+    P.atualizar('Cobrancas', x.id, { status: 'cancelada', atualizado_em: P.agora() });
+    if (x.contato_id) hist(x.contato_id, x.negocio_id, u, 'cobranca', 'Cancelada: ' + FIN.brl(x.valor) + ' - ' + x.descricao, x.id);
+    return true;
+  };
+  R['cobranca.vencimento'] = function (u, b) {
+    var x = exigeCobranca(u, b.id);
+    if (x.status !== 'pendente' || !/^\d{4}-\d{2}-\d{2}$/.test(U.str(b.vencimento))) throw new Error('Informe a nova data.');
+    P.atualizar('Cobrancas', x.id, { vencimento: b.vencimento, lembrete_em: '', atraso_avisado: '', atualizado_em: P.agora() });
+    return true;
+  };
+  R['cobranca.link'] = function (u, b) { var x = exigeCobranca(u, b.id); if (x.status !== 'pendente' && x.tipo !== 'link') throw new Error('Esta cobrança não está em aberto.'); return { link: FIN.gerarLink(x, x.contato_id ? contatoPorId(x.contato_id) : null) }; };
+  R['venda.link'] = function (u, b) {
+    exige(u, 'financeiro');
+    if (!U.str(b.descricao).trim() || U.num(b.valor) <= 0) throw new Error('Informe o produto e o valor.');
+    var x = { id: P.id('LK'), tipo: 'link', ref_id: '', contato_id: '', negocio_id: '', descricao: U.cap(b.descricao, 120), valor: String(U.num(b.valor)), vencimento: '', status: 'ativo', pago_em: '', forma: '',
+      parcela: '0', parcelas: '1', link: '', mp_id: '', origem: 'link', lembrete_em: '', atraso_avisado: '', reembolsado_em: '', reembolso_valor: '', criado_em: P.agora(), atualizado_em: P.agora() };
+    P.inserir('Cobrancas', x);
+    try { FIN.gerarLink(x, null); } catch (e) { P.excluir('Cobrancas', x.id); throw e; }
+    return x;
+  };
+  R['mp.testar'] = function (u) { exige(u, 'integracoes'); var r = FIN.mpReq('/users/me', 'get'); return { ok: true, texto: 'Conectado: ' + (r.nickname || r.email || r.id) }; };
+
+  // ---- limites, suporte e chat
+  R['limites'] = function (u) { exige(u, 'equipe'); return limites(); };
+  R['suporte.ver'] = function () { return SUP.estado(); };
+  R['suporte.salvar'] = function (u, b) { exige(u, 'equipe'); if (U.str(b.codigo).trim()) SUP.ler(b.codigo); salvarCfg({ SUPORTE_CODIGO: U.str(b.codigo).trim().replace(/\s+/g, '') }); return SUP.estado(); };
 
   // ---- arquivo mensal
   R['arquivo.listar'] = function (u) {
@@ -2678,8 +3141,9 @@ function PrumoLogica(P) {
     var outro = P.tabela('Usuarios').filter(function (x) { return U.str(x.email).toLowerCase() === email && x.id !== d.id; })[0];
     if (outro) throw new Error('Já existe um usuário com este e-mail.');
     var perfil = PERFIS.indexOf(d.perfil) >= 0 ? d.perfil : 'sdr';
+    var perms = perfil === 'personalizado' ? U.lista(d.permissoes).filter(function (k) { return AREAS[k]; }).join(',') : '';
     var reg = { nome: U.cap(d.nome, 80), email: email, perfil: perfil, ativo: d.ativo === 'NAO' ? 'NAO' : 'SIM', recebe_leads: d.recebe_leads === 'SIM' ? 'SIM' : 'NAO', cor: /^#[0-9a-f]{6}$/i.test(d.cor) ? d.cor : '',
-      meta_valor: String(U.num(d.meta_valor) || ''), meta_reunioes: String(U.num(d.meta_reunioes) || '') };
+      meta_valor: String(U.num(d.meta_valor) || ''), meta_reunioes: String(U.num(d.meta_reunioes) || ''), permissoes: perms };
     if (d.id === u.id && (reg.perfil !== 'admin' || reg.ativo !== 'SIM')) throw new Error('Você não pode tirar o seu próprio acesso de administrador.');
     if (d.senha) {
       if (U.str(d.senha).length < 8) throw new Error('A senha precisa de pelo menos 8 caracteres.');
@@ -2744,6 +3208,7 @@ function PrumoLogica(P) {
     if (!cfg().WEBHOOK_CHAVE) salvarCfg({ WEBHOOK_CHAVE: P.uuid().replace(/-/g, '') });
     if (!cfg().ENTRADA_CHAVE) salvarCfg({ ENTRADA_CHAVE: P.uuid().replace(/-/g, '') });
     if (!cfg().VENDAS_CHAVE) salvarCfg({ VENDAS_CHAVE: P.uuid().replace(/-/g, '') });
+    if (!cfg().MP_CHAVE) salvarCfg({ MP_CHAVE: P.uuid().replace(/-/g, '') });
     if (!cfg().RASTREIO_SEGREDO) salvarCfg({ RASTREIO_SEGREDO: P.uuid().replace(/-/g, '') + P.uuid().replace(/-/g, '') });
     if (!cfg().ARQUIVO_FEITO && !P.tabela('Mensagens').length) salvarCfg({ ARQUIVO_FEITO: mesAtual() });
   }
@@ -2760,6 +3225,10 @@ function PrumoLogica(P) {
       P.atualizar('Grupos', g.id, { cliques: String(U.num(g.cliques) + 1) });
       return { link: g.link, nome: g.nome, marca: marca().nome };
     }
+    if (acao === 'publico.chat.config') return CHAT.config();
+    if (acao === 'publico.chat.iniciar') return CHAT.iniciar(b);
+    if (acao === 'publico.chat.enviar') return CHAT.enviar(b);
+    if (acao === 'publico.chat.receber') return CHAT.receber(b);
     if (acao === 'publico.clique') { var rc = EM.clicou(b.f, b.s, b.u); return { ok: !!rc, pcid: rc ? rc.pcid : '' }; }
     if (acao === 'publico.sair') return EM.sair(b.f, b.s);
     if (acao === 'publico.visita') return EM.visita(b);
@@ -2786,7 +3255,7 @@ function PrumoLogica(P) {
   }
 
   return {
-    U: U, WA: WA, IG: IG, INT: INT, EM: EM, cfg: cfg, arquivar: arquivar, receberRastreio: receberRastreio, salvarCfg: salvarCfg, rotear: rotear, receberWebhook: receberWebhook, trabalhar: trabalhar,
+    U: U, WA: WA, IG: IG, INT: INT, EM: EM, FIN: FIN, CHAT: CHAT, SUP: SUP, cfg: cfg, arquivar: arquivar, receberRastreio: receberRastreio, salvarCfg: salvarCfg, rotear: rotear, receberWebhook: receberWebhook, trabalhar: trabalhar,
     semear: semear, receber: receber, montarTexto: montarTexto, filtrarContatos: filtrarContatos, versao: PRUMO_VERSAO
   };
 }

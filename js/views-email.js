@@ -14,21 +14,22 @@
     divisor: ['Divisor', 'menu'],
     espaco: ['Espaço', 'mais']
   };
-  var ST = { rascunho: ['Rascunho', 'st-off'], agendada: ['Agendado', 'st-aviso'], enviando: ['Enviando', 'st-lead'], pausada: ['Pausado', 'st-aviso'], concluida: ['Enviado', 'st-on'], cancelada: ['Cancelado', 'st-erro'], erro: ['Erro', 'st-erro'], ativo: ['Em uso nas automações', 'st-on'] };
+  var ST = { rascunho: ['Rascunho', 'st-off'], agendada: ['Agendado', 'st-aviso'], enviando: ['Enviando', 'st-lead'], pausada: ['Pausado', 'st-aviso'], concluida: ['Enviado', 'st-on'], cancelada: ['Cancelado', 'st-erro'], erro: ['Erro', 'st-erro'], ativo: ['Em uso nas automações', 'st-on'], modelo: ['Modelo', 'st-roxo'] };
 
   C.views.email = {
     titulo: 'E-mail marketing',
     acoes: function () { return '<button class="btn pri" data-a="novo">' + ic('plus') + '<span class="txt"> Novo e-mail</span></button>'; },
-    ligarAcoes: function (el) { el.querySelector('[data-a=novo]').onclick = function () { editar({ tipo: aba, blocos: modeloInicial() }); }; },
+    ligarAcoes: function (el) { el.querySelector('[data-a=novo]').onclick = function () { escolherModelo(aba === 'modelo' ? 'campanha' : aba); }; },
     render: function (el) {
       var lista = (S.emails || []).filter(function (e) { return (e.tipo || 'campanha') === aba; }).sort(function (a, b) { return (a.criado_em || '') < (b.criado_em || '') ? 1 : -1; });
-      el.innerHTML = '<div class="abas">' + [['campanha', 'Campanhas'], ['automacao', 'E-mails de automação']].map(function (a) { return '<button data-ab="' + a[0] + '" class="' + (aba === a[0] ? 'on' : '') + '">' + a[1] + '</button>'; }).join('') + '</div>' +
+      el.innerHTML = '<div class="abas">' + [['campanha', 'Campanhas'], ['automacao', 'E-mails de automação'], ['modelo', 'Modelos']].map(function (a) { return '<button data-ab="' + a[0] + '" class="' + (aba === a[0] ? 'on' : '') + '">' + a[1] + '</button>'; }).join('') + '</div>' +
         '<div id="em-cota"></div>' +
         (aba === 'automacao' ? '<p class="muted small" style="margin:0 0 12px">Estes e-mails são usados no passo <b>Enviar e-mail</b> das automações (boas-vindas, sequência de nutrição, carrinho abandonado...). Os números somam todos os envios.</p>' : '') +
         (lista.length ? '<div class="lista-cards">' + lista.map(cartao).join('') + '</div>' :
           '<div class="card vazio">' + ic('email') + '<h3>' + (aba === 'campanha' ? 'Nenhuma campanha de e-mail' : 'Nenhum e-mail de automação') + '</h3><p>' + (aba === 'campanha' ? 'Mande newsletters, promoções e novidades para a sua lista, com relatório de aberturas e cliques.' : 'Crie e-mails para as automações mandarem sozinhas.') + '</p><button class="btn pri" id="em-novo">' + ic('plus') + ' Criar e-mail</button></div>');
       C.$$('[data-ab]', el).forEach(function (b) { b.onclick = function () { aba = b.dataset.ab; C.render(); }; });
-      var nv = C.$('#em-novo', el); if (nv) nv.onclick = function () { editar({ tipo: aba, blocos: modeloInicial() }); };
+      var nv = C.$('#em-novo', el); if (nv) nv.onclick = function () { aba === 'modelo' ? editar({ tipo: 'modelo', blocos: modeloInicial() }) : escolherModelo(aba); };
+      C.$$('[data-usar]', el).forEach(function (b) { b.onclick = function () { var m = S.emails.filter(function (x) { return x.id === b.dataset.usar; })[0]; usarModelo(m, 'campanha'); }; });
       C.$$('[data-ea]', el).forEach(function (b) { b.onclick = function () { acao(b.dataset.ea, b.dataset.id, b); }; });
       C.api('email.cota').then(function (q) { var box = C.$('#em-cota'); if (box) box.innerHTML = avisoCota(q); }).catch(function () { });
     },
@@ -50,7 +51,8 @@
     var st = ST[e.status] || [e.status, 'st-off'];
     var env = C.num(e.enviados);
     var botoes = '';
-    if (e.tipo === 'automacao') botoes = '<button class="btn peq" data-ea="editar" data-id="' + e.id + '">' + ic('lapis') + ' Editar</button>';
+    if (e.tipo === 'modelo') botoes = '<button class="btn peq pri" data-usar="' + e.id + '">' + ic('plus') + ' Usar</button><button class="btn peq" data-ea="editar" data-id="' + e.id + '">' + ic('lapis') + ' Editar</button>';
+    else if (e.tipo === 'automacao') botoes = '<button class="btn peq" data-ea="editar" data-id="' + e.id + '">' + ic('lapis') + ' Editar</button>';
     else if (e.status === 'rascunho' || e.status === 'agendada') botoes = '<button class="btn peq" data-ea="editar" data-id="' + e.id + '">' + ic('lapis') + ' Editar</button><button class="btn peq pri" data-ea="enviar" data-id="' + e.id + '">' + ic('enviar') + ' ' + (e.agendar_em ? 'Agendar' : 'Enviar') + '</button>';
     else if (e.status === 'enviando') botoes = '<button class="btn peq" data-ea="pausar" data-id="' + e.id + '">' + ic('pause') + ' Pausar</button>';
     else if (e.status === 'pausada') botoes = '<button class="btn peq" data-ea="retomar" data-id="' + e.id + '">' + ic('play') + ' Retomar</button><button class="btn peq perigo" data-ea="cancelar" data-id="' + e.id + '">Cancelar</button>';
@@ -85,6 +87,26 @@
     C.comBotao(btn, function () { return C.api('email.' + a, { id: id }).then(depois); });
   }
 
+  /** Modelos prontos de e-mail (além dos que a pessoa salva). */
+  var PRONTOS = [
+    { nome: 'Newsletter', assunto: 'Novidades da semana, {primeiro_nome}', blocos: [{ tipo: 'titulo', texto: 'O que aconteceu por aqui' }, { tipo: 'texto', texto: 'Oi {primeiro_nome}! Separei as novidades da semana para você.' }, { tipo: 'divisor' }, { tipo: 'titulo', texto: 'Destaque' }, { tipo: 'texto', texto: 'Conte aqui a novidade principal em poucas linhas.' }, { tipo: 'botao', texto: 'Ler mais', url: 'https://' }] },
+    { nome: 'Promoção', assunto: '{primeiro_nome}, condição especial só até sexta', blocos: [{ tipo: 'titulo', texto: 'Uma condição especial para você' }, { tipo: 'texto', texto: 'Até sexta-feira, *[produto]* sai com *[desconto]*. Depois volta ao preço normal.' }, { tipo: 'botao', texto: 'Quero aproveitar', url: 'https://' }, { tipo: 'texto', texto: 'Dúvidas? É só responder este e-mail.' }] },
+    { nome: 'Boas-vindas', assunto: 'Bem-vindo(a), {primeiro_nome}!', blocos: [{ tipo: 'titulo', texto: 'Que bom ter você aqui, {primeiro_nome}!' }, { tipo: 'texto', texto: 'A partir de agora você recebe nossas novidades e conteúdos. Para começar, veja o que mais ajuda quem acabou de chegar:' }, { tipo: 'botao', texto: 'Começar por aqui', url: 'https://' }] },
+    { nome: 'Lembrete de pagamento', assunto: 'Sua parcela vence em {vencimento}', blocos: [{ tipo: 'titulo', texto: 'Lembrete de vencimento' }, { tipo: 'texto', texto: 'Oi {primeiro_nome}, a parcela {parcela} de {descricao_cobranca}, no valor de {valor_parcela}, vence em {vencimento}.' }, { tipo: 'botao', texto: 'Pagar agora', url: '{link_pagamento}' }, { tipo: 'texto', texto: 'Se já pagou, desconsidere este e-mail.' }] },
+    { nome: 'Carrinho abandonado', assunto: '{primeiro_nome}, você esqueceu algo', blocos: [{ tipo: 'titulo', texto: 'Sua vaga ainda está separada' }, { tipo: 'texto', texto: 'Vimos que você começou a inscrição mas não terminou. Ficou alguma dúvida? Responda este e-mail que a gente ajuda.' }, { tipo: 'botao', texto: 'Concluir minha inscrição', url: 'https://' }] }
+  ];
+  function usarModelo(m, tipo) { editar({ tipo: tipo, nome: '', assunto: m.assunto, preheader: m.preheader || '', blocos: JSON.parse(JSON.stringify(C.json(m.blocos, m.blocos) || [])) }); }
+  function escolherModelo(tipo) {
+    var meus = (S.emails || []).filter(function (e) { return e.tipo === 'modelo'; });
+    var el = C.modal({
+      titulo: 'Novo e-mail', tamanho: 'largo',
+      corpo: '<div class="tipos-passo"><button class="tipo-passo" data-pr="branco"><span class="passo-ic c-msg">' + ic('plus') + '</span><div><b>Em branco</b><span>Comece do zero</span></div></button>' +
+        PRONTOS.map(function (m, i) { return '<button class="tipo-passo" data-pr="' + i + '"><span class="passo-ic c-msg">' + ic('email') + '</span><div><b>' + esc(m.nome) + '</b><span>' + esc(m.assunto) + '</span></div></button>'; }).join('') +
+        meus.map(function (m) { return '<button class="tipo-passo" data-meu="' + m.id + '"><span class="passo-ic c-acao">' + ic('nota') + '</span><div><b>' + esc(m.nome) + '</b><span>Seu modelo</span></div></button>'; }).join('') + '</div>'
+    });
+    C.$$('[data-pr]', el).forEach(function (b) { b.onclick = function () { el.fechar(); if (b.dataset.pr === 'branco') editar({ tipo: tipo, blocos: modeloInicial() }); else usarModelo(PRONTOS[Number(b.dataset.pr)], tipo); }; });
+    C.$$('[data-meu]', el).forEach(function (b) { b.onclick = function () { el.fechar(); usarModelo(meus.filter(function (x) { return x.id === b.dataset.meu; })[0], tipo); }; });
+  }
   function modeloInicial() {
     return [{ tipo: 'titulo', texto: 'Olá, {primeiro_nome}!' }, { tipo: 'texto', texto: 'Escreva aqui a sua mensagem. Use *asteriscos* para negrito.' }, { tipo: 'botao', texto: 'Saiba mais', url: 'https://' }];
   }
@@ -114,7 +136,7 @@
           '<div class="campo" style="margin-top:12px"><label>Agendar para (opcional)</label><input class="inp" type="datetime-local" id="e-ag" value="' + esc((e.agendar_em || '').slice(0, 16)) + '"></div>' : '') +
         '</div><div class="em-dir"><div class="em-previa-cab"><span class="rot">Prévia</span><span class="small muted" id="e-prev-ass"></span></div><iframe id="e-prev" title="Prévia do e-mail" sandbox=""></iframe>' +
         '<div class="linha" style="margin-top:10px"><input class="inp" id="e-teste" type="email" value="' + esc(S.user.email || '') + '" placeholder="seu@email.com"><button class="btn" id="e-envteste" style="flex:0 0 auto" data-carregando=" Enviando...">' + ic('enviar') + ' Enviar teste</button></div></div></div>',
-      pe: '<button class="btn" data-fechar>Cancelar</button><button class="btn pri" id="e-ok" data-carregando=" Salvando...">Salvar</button>'
+      pe: (e.tipo !== 'modelo' ? '<button class="btn esq" id="e-modelo">' + ic('nota') + ' Salvar como modelo</button>' : '') + '<button class="btn" data-fechar>Cancelar</button><button class="btn pri" id="e-ok" data-carregando=" Salvando...">Salvar</button>'
     });
     var tgI = campanha ? C.campoTags(el.querySelector('#e-tags'), f.tags || [], C.todasTags()) : null;
     var tgE = campanha ? C.campoTags(el.querySelector('#e-semtags'), f.sem_tags || [], C.todasTags()) : null;
@@ -157,6 +179,11 @@
     C.$$('[data-add]', el).forEach(function (b) { b.onclick = function () { var n = { tipo: b.dataset.add }; if (n.tipo === 'botao') { n.texto = 'Saiba mais'; n.url = 'https://'; } if (n.tipo === 'texto' || n.tipo === 'titulo') n.texto = ''; blocos.push(n); pintar(); previa(); }; });
     ['#e-ass', '#e-pre'].forEach(function (s) { el.querySelector(s).addEventListener('input', previa); });
     if (campanha) { el.addEventListener('change', function (ev) { if (ev.target.closest('.card')) contar(); }); el.addEventListener('input', function (ev) { if (ev.target.closest('.card')) contar(); }); }
+    var bm = el.querySelector('#e-modelo');
+    if (bm) bm.onclick = function () {
+      var d = dados();
+      C.comBotao(bm, function () { return C.api('email.salvar', { email: { tipo: 'modelo', nome: (d.nome || d.assunto || 'Modelo') + ' (modelo)', assunto: d.assunto || 'Sem assunto', preheader: d.preheader, blocos: d.blocos } }).then(function (r) { mesclar([r]); C.toast('Salvo em E-mail marketing > Modelos', 'ok'); }); });
+    };
     el.querySelector('#e-envteste').onclick = function () {
       var b = this;
       C.comBotao(b, function () { return C.api('email.testar', { email: dados(), para: el.querySelector('#e-teste').value }).then(function (r) { C.toast('Teste enviado' + (r.via === 'brevo' ? ' pelo Brevo' : ' pelo Gmail') + (C.ehDemo() ? ' (na demonstração nada sai de verdade)' : ''), 'ok'); }); });
@@ -164,7 +191,7 @@
     el.querySelector('#e-ok').onclick = function () {
       var d = dados();
       C.comBotao(this, function () {
-        if (d.blocos.some(function (b) { return b.tipo === 'botao' && !/^https?:\/\/.+\..+/.test(b.url || ''); })) throw new Error('Confira o link dos botões (precisa começar com https://).');
+        if (d.blocos.some(function (b) { return b.tipo === 'botao' && (b.url || '').charAt(0) !== '{' && !/^https?:\/\/.+\..+/.test(b.url || ''); })) throw new Error('Confira o link dos botões (precisa começar com https://).');
         if (d.blocos.some(function (b) { return b.tipo === 'imagem' && !/^https:\/\//.test(b.url || ''); })) throw new Error('A imagem precisa de um link que comece com https://');
         return C.api('email.salvar', { email: d }).then(function (r) { mesclar([r]); el.fechar(); C.toast('E-mail salvo', 'ok'); C.render(); });
       });
