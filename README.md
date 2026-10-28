@@ -1,6 +1,6 @@
 # Prumo CRM
 
-CRM para pequenas empresas com WhatsApp, robôs de atendimento, disparos, grupos e funil de vendas. Vendido com **pagamento único**: o sistema roda na conta Google do cliente (Planilhas + Apps Script) e as telas ficam no GitHub Pages. Custo de infraestrutura zero.
+CRM para pequenas empresas com WhatsApp, robôs de atendimento, disparos, grupos e funil de vendas. Licença de pagamento único: o servidor roda na conta Google do cliente (Planilhas + Apps Script) e as telas ficam no GitHub Pages do próprio cliente. Custo de infraestrutura zero.
 
 Sistema white label: cada empresa troca nome, logo e cores pelo próprio sistema.
 
@@ -32,9 +32,8 @@ app/                 telas do sistema (HTML, CSS e JS puros, sem build)
 backend/
   plataforma.gs      servidor Apps Script (planilha, webhooks, gatilho de 1 minuto)
   Codigo.gs          arquivo único para colar no Apps Script (gerado)
-vendas/index.html    página de vendas do produto
-docs/                instalação, WhatsApp, integrações e guia do vendedor
-ferramentas/         montar.js (gera o Codigo.gs) e testar.js (testes da lógica)
+docs/                instalação, WhatsApp e integrações (vão para o cliente)
+ferramentas/         montar.js, testar.js e empacotar.js
 ```
 
 ## Comandos
@@ -51,11 +50,14 @@ Testa a lógica do servidor (webhooks reais da Evolution, WAHA e Meta, robô, di
 
 Para ver localmente: sirva a pasta `app` (ex.: `python -m http.server 5180 --directory app`) e abra `http://localhost:5180/?demo=1`.
 
-## Publicação
+## Entrega para o cliente
 
-Só GitHub Pages. A Action `.github/workflows/pages.yml` publica `vendas/` na raiz e `app/` em `/app`. Em Settings > Pages, escolha a fonte **GitHub Actions**.
+```bash
+node ferramentas/empacotar.js
+```
+Monta o código do servidor, roda os testes e gera `dist/prumo-crm-vX.Y.Z.zip` limpo: `site/` (sobe no GitHub Pages do cliente), `planilha/Codigo.gs` (vai no Apps Script da planilha), `docs/` e um `LEIA-ME.txt`. Sem histórico do git, sem testes e sem dados do vendedor.
 
-Observação: no plano gratuito do GitHub, o Pages só publica repositórios públicos. Com repositório privado é preciso o GitHub Pro, ou manter um segundo repositório público só com o site.
+A página de vendas e o pagamento ficam fora deste projeto, na pasta `prumo-vendas`.
 
 ## Documentação
 
@@ -63,7 +65,6 @@ Observação: no plano gratuito do GitHub, o Pages só publica repositórios pú
 - [WhatsApp com Evolution API](docs/WHATSAPP_EVOLUTION.md)
 - [WhatsApp com WAHA](docs/WHATSAPP_WAHA.md)
 - [Integrações de captação](docs/INTEGRACOES.md)
-- [Guia do vendedor](docs/GUIA_DO_VENDEDOR.md)
 
 ## Referências estudadas
 
