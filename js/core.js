@@ -48,6 +48,12 @@
     return C.brl(n);
   };
   C.inteiro = function (n) { return Number(n || 0).toLocaleString('pt-BR'); };
+  /** Lead esperando resposta há mais tempo que o combinado em Ajustes > Regras. */
+  C.foraDoPrazo = function (c) {
+    if (c.ultima_direcao !== 'in' || !C.num(c.nao_lidas)) return false;
+    var d = C.data(c.ultima_msg_em);
+    return !!d && (Date.now() - d.getTime()) / 60000 > (C.num(S.config.sla_minutos) || 15);
+  };
   C.data = function (s) { if (!s) return null; var d = new Date(String(s).replace(' ', 'T')); return isNaN(d) ? null : d; };
   C.fmtData = function (s, hora) {
     var d = C.data(s); if (!d) return '—';
@@ -92,6 +98,14 @@
   C.etapa = function (id) { var e = null; S.funis.forEach(function (f) { f.etapas.forEach(function (x) { if (x.id === id) e = x; }); }); return e; };
   C.funil = function (id) { return S.funis.filter(function (f) { return f.id === id; })[0] || null; };
   C.pode = function (area) { return !!S.perm[area]; };
+  /** Perfis de acesso (o servidor confere as permissões de verdade). */
+  C.PERFIS = {
+    admin: { nome: 'Administrador', desc: 'Cria as contas da equipe, configura integrações, marca e regras. Vê tudo.' },
+    gestor: { nome: 'Gestor', desc: 'Vê toda a operação, faz disparos, automações e relatórios. Não mexe em equipe nem integrações.' },
+    sdr: { nome: 'SDR', desc: 'Atende os leads novos (os sem dono e os seus), qualifica e passa para um closer, com reunião se quiser.' },
+    closer: { nome: 'Closer', desc: 'Recebe os leads qualificados e fecha a venda. Vê só os contatos e negócios dele.' },
+    atendente: { nome: 'Atendente', desc: 'Atende conversas e os seus contatos. Funciona como o SDR.' }
+  };
   C.av = function (nome, cls, cor) { return '<span class="av ' + (cls || '') + '" style="background:' + (cor || C.corDe(nome)) + '">' + C.esc(C.iniciais(nome)) + '</span>'; };
   C.todasTags = function () {
     var set = {};
@@ -170,6 +184,13 @@
     duplicar: '<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
     nota: '<path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/>',
     mapa: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+    instagram: '<rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5h.01"/>',
+    arquivo: '<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
+    passar: '<path d="M16 3h5v5M21 3l-7 7"/><path d="M8 21H3v-5M3 21l7-7"/>',
+    alvo: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    estrela: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>',
+    carrinho: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+    api: '<path d="m18 16 4-4-4-4M6 8l-4 4 4 4M14.5 4l-5 16"/>',
     predio: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>'
   };
   C.ic = function (n, cls) { return '<svg class="i ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + (P[n] || P.info) + '</svg>'; };

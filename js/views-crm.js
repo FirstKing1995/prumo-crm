@@ -21,6 +21,8 @@
       var agora = C.isoLocal();
       var atrasadas = S.tarefas.filter(function (t) { return t.feita !== 'SIM' && t.vence_em && t.vence_em < agora && (!t.responsavel_id || t.responsavel_id === S.user.id || C.pode('todos')); });
       var semResp = cs.filter(function (c) { return c.ultima_direcao === 'in' && C.num(c.nao_lidas) > 0; }).sort(function (a, b) { return a.ultima_msg_em < b.ultima_msg_em ? -1 : 1; });
+      var sla = C.num(S.config.sla_minutos) || 15;
+      var foraSla = semResp.filter(function (c) { return C.foraDoPrazo(c); });
 
       var dias = [];
       for (var i = 29; i >= 0; i--) dias.push(C.diasAtras(i));
@@ -35,12 +37,13 @@
       }
       h += '<div class="kpis">' +
         kpi('contatos', 'Novos contatos (7 dias)', C.inteiro(novos7), C.inteiro(novos30) + ' nos últimos 30 dias') +
-        kpi('conversas', 'Conversas aguardando', C.inteiro(naoLidas), 'com mensagem não lida') +
+        kpi('conversas', 'Conversas aguardando', C.inteiro(naoLidas), foraSla.length ? '<span style="color:var(--vermelho);font-weight:700">' + foraSla.length + ' há mais de ' + sla + ' min</span>' : 'com mensagem não lida') +
         kpi('negocios', 'Em negociação', C.brlCurto(abertos.reduce(function (s, n) { return s + C.num(n.valor); }, 0)), abertos.length + ' negócios abertos') +
         kpi('trofeu', 'Vendido no mês', C.brlCurto(ganhosMes.reduce(function (s, n) { return s + C.num(n.valor); }, 0)), ganhosMes.length + ' negócios ganhos') +
         kpi('raio', 'Taxa de conversão', C.pct(ganhos30.length, fech30.length) + '%', 'negócios fechados em 30 dias') +
         kpi('tarefas', 'Tarefas atrasadas', C.inteiro(atrasadas.length), atrasadas.length ? 'precisam de atenção' : 'tudo em dia') +
         '</div>';
+      h += painelEquipe();
       h += '<div class="grid-3"><div class="card"><div class="card-cab"><h3>Novos contatos por dia</h3><span class="acoes small muted">últimos 30 dias</span></div><div class="card-pad">' +
         '<div class="barras">' + dias.map(function (k) { var v = porDia[k] || 0; return '<div class="b" style="height:' + Math.max(2, v / max * 100) + '%" data-t="' + k.slice(8, 10) + '/' + k.slice(5, 7) + ': ' + v + '"></div>'; }).join('') + '</div>' +
         '<div class="eixo"><span>' + C.fmtData(dias[0], false) + '</span><span>hoje</span></div></div></div>';
@@ -57,7 +60,7 @@
       h += '</div></div></div>';
       h += '<div class="grid-2" style="margin-top:16px"><div class="card"><div class="card-cab"><h3>Esperando resposta</h3><span class="acoes"><button class="btn peq" data-ir2="conversas">Abrir conversas</button></span></div>';
       h += semResp.length ? '<div>' + semResp.slice(0, 6).map(function (c) {
-        return '<button class="ib-item" data-conv="' + c.id + '">' + C.av(c.nome) + '<div class="meio"><div class="l1"><b>' + esc(c.nome) + '</b><span class="hora">' + C.rel(c.ultima_msg_em) + '</span></div><div class="l2"><span>' + esc(c.ultima_msg) + '</span></div></div></button>';
+        return '<button class="ib-item' + (C.foraDoPrazo(c) ? ' atrasada' : '') + '" data-conv="' + c.id + '">' + C.av(c.nome) + '<div class="meio"><div class="l1"><b>' + esc(c.nome) + '</b><span class="hora">' + C.rel(c.ultima_msg_em) + '</span></div><div class="l2"><span>' + esc(c.ultima_msg) + '</span></div></div></button>';
       }).join('') + '</div>' : '<div class="vazio">' + ic('check2') + '<h3>Ninguém esperando</h3><p>Todas as conversas foram respondidas.</p></div>';
       h += '</div><div class="card"><div class="card-cab"><h3>Minhas tarefas</h3><span class="acoes"><button class="btn peq" data-nova-tarefa>' + ic('plus') + ' Nova</button></span></div>';
       var minhas = S.tarefas.filter(function (t) { return t.feita !== 'SIM' && (t.responsavel_id === S.user.id || !t.responsavel_id); }).sort(function (a, b) { return (a.vence_em || '9') < (b.vence_em || '9') ? -1 : 1; }).slice(0, 7);
@@ -65,6 +68,7 @@
       h += '</div></div>';
       el.innerHTML = h;
       ligarTarefas(el, function () { C.render(); });
+      C.$$('[data-reu]', el).forEach(function (b) { b.onclick = function () { C.acoesReuniao(S.negocios.filter(function (n) { return n.id === b.dataset.reu; })[0], function () { C.recarregar(); }); }; });
       C.$$('[data-conv]', el).forEach(function (b) { b.onclick = function () { C.abrirConversa(b.dataset.conv); }; });
       C.$$('[data-ir2]', el).forEach(function (b) { b.onclick = function () { C.ir(b.dataset.ir2); }; });
       var ii = C.$('[data-ir-integ]', el); if (ii) ii.onclick = function (e) { e.preventDefault(); C.ir('integracoes'); };
@@ -72,6 +76,25 @@
     },
     aoSincronizar: function (r) { if (r.contatosMudaram || r.completo) { if (!C.$('.modal-bg')) C.render(); } }
   };
+  /** Painel da equipe comercial: meta do mês e próximas reuniões (para SDR, closer e quem gerencia). */
+  function painelEquipe() {
+    var eu = S.user, mes = C.hoje().slice(0, 7), agora = C.isoLocal();
+    var ehSdr = eu.perfil === 'sdr' || eu.perfil === 'atendente';
+    var reunioes = S.negocios.filter(function (n) { return n.reuniao_em && n.reuniao_status === 'agendada' && (C.pode('todos') || n.responsavel_id === eu.id || n.sdr_id === eu.id); })
+      .sort(function (a, b) { return a.reuniao_em < b.reuniao_em ? -1 : 1; });
+    if (!ehSdr && eu.perfil !== 'closer' && !reunioes.length) return '';
+    var meta, feito, rot;
+    if (ehSdr) { meta = C.num(eu.meta_reunioes); feito = S.negocios.filter(function (n) { return n.sdr_id === eu.id && n.reuniao_em && (n.passado_em || '').slice(0, 7) === mes; }).length; rot = 'reuniões marcadas'; }
+    else { meta = C.num(eu.meta_valor); feito = S.negocios.filter(function (n) { return n.responsavel_id === eu.id && n.status === 'ganho' && (n.fechado_em || '').slice(0, 7) === mes; }).reduce(function (s, n) { return s + C.num(n.valor); }, 0); rot = 'vendidos'; }
+    var p = meta ? Math.min(100, Math.round(feito / meta * 100)) : 0;
+    var h = '<div class="grid-2" style="margin-bottom:16px">';
+    h += '<div class="card card-pad"><div class="rot">' + ic('alvo') + ' Minha meta do mês</div>' + (meta ? '<div style="display:flex;align-items:baseline;gap:8px;margin:8px 0"><b style="font-size:24px">' + (ehSdr ? feito : C.brlCurto(feito)) + '</b><span class="muted">de ' + (ehSdr ? meta : C.brlCurto(meta)) + ' ' + rot + '</span></div><div class="meta-barra grande"><div style="width:' + p + '%"></div></div><div class="small muted" style="margin-top:6px">' + p + '% da meta</div>' : '<p class="small muted">' + (C.pode('equipe') ? 'Defina metas em Equipe e acessos.' : 'O administrador ainda não definiu a sua meta.') + '</p>') + '</div>';
+    h += '<div class="card"><div class="card-cab"><h3>' + ic('calendario') + ' Próximas reuniões</h3></div>' + (reunioes.length ? reunioes.slice(0, 5).map(function (n) {
+      var c = C.contato(n.contato_id), uc = C.usuario(n.responsavel_id), passou = n.reuniao_em < agora;
+      return '<button class="ib-item" data-reu="' + n.id + '">' + C.av(c ? c.nome : '?') + '<div class="meio"><div class="l1"><b>' + esc(c ? c.nome : n.titulo) + '</b><span class="hora' + (passou ? '" style="color:var(--vermelho)' : '') + '">' + C.fmtData(n.reuniao_em) + '</span></div><div class="l2"><span>' + (passou ? 'Marque se aconteceu' : 'com ' + esc(uc ? uc.nome : '')) + '</span></div></div></button>';
+    }).join('') : '<div class="vazio" style="padding:20px"><p>Nenhuma reunião marcada.</p></div>') + '</div></div>';
+    return h;
+  }
   function kpi(i, rot, val, sub) { return '<div class="card kpi"><div class="rot">' + ic(i) + rot + '</div><div class="val">' + val + '</div><div class="sub">' + sub + '</div></div>'; }
 
   /* ============================================================== CONTATOS */
@@ -363,9 +386,10 @@
       var c = dados.contato, cp = C.json(c.campos, {});
       var u = C.usuario(c.responsavel_id);
       var campos = S.config.campos || [];
-      var h = '<div class="modal-cab">' + C.av(c.nome, 'gde') + '<div class="trunc"><h2 class="trunc">' + esc(c.nome) + '</h2><div class="small muted">' + esc(C.tel(c.telefone)) + (c.email ? ' · ' + esc(c.email) : '') + '</div></div><button class="btn fantasma ic peq x" data-x aria-label="Fechar">' + ic('x') + '</button></div>' +
+      var h = '<div class="modal-cab">' + C.av(c.nome, 'gde') + '<div class="trunc"><h2 class="trunc">' + esc(c.nome) + '</h2><div class="small muted">' + esc(C.tel(c.telefone)) + (c.ig_usuario ? (c.telefone ? ' · ' : '') + '@' + esc(c.ig_usuario) : '') + (c.email ? ' · ' + esc(c.email) : '') + '</div></div><button class="btn fantasma ic peq x" data-x aria-label="Fechar">' + ic('x') + '</button></div>' +
         '<div style="display:flex;gap:8px;padding:12px 20px;border-bottom:1px solid var(--borda);flex-wrap:wrap">' +
-        (c.telefone ? '<button class="btn verde peq" data-f="conversa">' + ic('conversas') + ' Conversa</button>' : '') +
+        (c.telefone || c.ig_id ? '<button class="btn verde peq" data-f="conversa">' + ic(c.canal === 'instagram' ? 'instagram' : 'conversas') + ' Conversa</button>' : '') +
+        (C.pode('passar') ? '<button class="btn peq acc" data-f="passar">' + ic('passar') + ' Passar para closer</button>' : '') +
         '<button class="btn peq" data-f="editar">' + ic('lapis') + ' Editar</button><button class="btn peq" data-f="negocio">' + ic('plus') + ' Negócio</button><button class="btn peq" data-f="tarefa">' + ic('plus') + ' Tarefa</button>' +
         (C.pode('automacoes') ? '<button class="btn peq" data-f="automacao">' + ic('automacoes') + ' Automação</button>' : '') +
         (C.pode('excluir') ? '<button class="btn peq perigo" data-f="excluir" style="margin-left:auto" aria-label="Excluir contato">' + ic('lixo') + '</button>' : '') + '</div>' +
@@ -374,7 +398,7 @@
       if (aba === 'resumo') {
         h += '<div class="chips" style="margin-bottom:14px"><span class="status st-' + c.status + '">' + ({ lead: 'Lead', cliente: 'Cliente', inativo: 'Inativo' }[c.status] || '') + '</span>' + C.tags(c.tags).map(function (t) { return '<span class="chip">' + ic('tag') + esc(t) + '</span>'; }).join('') +
           (c.optout === 'SIM' ? '<span class="status st-erro">Não recebe mensagens automáticas</span>' : '') + '</div>';
-        h += '<div class="grade2">' + [['empresa', 'predio', c.empresa], ['cidade', 'mapa', c.cidade], ['origem', 'bandeira', 'Origem: ' + (c.origem || '—')], ['resp', 'equipe', 'Responsável: ' + (u ? u.nome : 'ninguém')], ['criado', 'calendario', 'Desde ' + C.fmtData(c.criado_em, false)], ['cargo', 'nota', c.cargo]]
+        h += '<div class="grade2">' + [['empresa', 'predio', c.empresa], ['cidade', 'mapa', c.cidade], ['origem', 'bandeira', 'Origem: ' + (c.origem || '—')], ['resp', 'equipe', 'Responsável: ' + (u ? u.nome : 'ninguém')], ['sdr', 'passar', c.sdr_id && C.usuario(c.sdr_id) ? 'SDR: ' + C.usuario(c.sdr_id).nome : ''], ['pontos', 'estrela', C.num(c.pontos) ? 'Pontuação: ' + C.num(c.pontos) : ''], ['criado', 'calendario', 'Desde ' + C.fmtData(c.criado_em, false)], ['cargo', 'nota', c.cargo]]
           .filter(function (x) { return x[2]; }).map(function (x) { return '<div class="dado">' + ic(x[1]) + '<span class="trunc">' + esc(x[2]) + '</span></div>'; }).join('') + '</div>';
         if (campos.length) h += '<h4 class="rot" style="margin:16px 0 6px">Campos personalizados</h4><div class="grade2">' + campos.map(function (f) { return '<div class="dado"><span class="fraco">' + esc(f.rotulo) + ':</span> <span class="trunc">' + esc(cp[f.chave] || '—') + '</span></div>'; }).join('') + '</div>';
         var extras = Object.keys(cp).filter(function (k) { return !campos.some(function (f) { return f.chave === k; }); });
@@ -382,7 +406,7 @@
         if (c.notas) h += '<h4 class="rot" style="margin:16px 0 6px">Observações</h4><p style="margin:0;white-space:pre-wrap">' + esc(c.notas) + '</p>';
         h += '<h4 class="rot" style="margin:20px 0 8px">Negócios</h4>' + (dados.negocios.length ? dados.negocios.map(function (n) {
           var et = C.etapa(n.etapa_id);
-          return '<div class="card" style="padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;cursor:pointer" data-neg="' + n.id + '"><span class="col-cab"><span class="bol" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + esc(et ? et.cor : '#999') + '"></span></span><div class="trunc" style="flex:1"><b>' + esc(n.titulo) + '</b><div class="small muted">' + esc(et ? et.nome : '') + ' · ' + C.brl(n.valor) + '</div></div><span class="status ' + (n.status === 'ganho' ? 'st-on' : n.status === 'perdido' ? 'st-erro' : 'st-lead') + '">' + n.status + '</span></div>';
+          return '<div class="card" style="padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;cursor:pointer" data-neg="' + n.id + '"><span class="col-cab"><span class="bol" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + esc(et ? et.cor : '#999') + '"></span></span><div class="trunc" style="flex:1"><b>' + esc(n.titulo) + '</b><div class="small muted">' + esc(et ? et.nome : '') + ' · ' + C.brl(n.valor) + (n.reuniao_em ? ' · reunião ' + C.fmtData(n.reuniao_em) + ' (' + ({ agendada: 'marcada', realizada: 'realizada', no_show: 'faltou', cancelada: 'cancelada' }[n.reuniao_status] || '') + ')' : '') + '</div></div>' + (n.reuniao_em && n.reuniao_status === 'agendada' ? '<button class="btn peq" data-reuniao="' + n.id + '">' + ic('calendario') + '</button>' : '') + '<span class="status ' + (n.status === 'ganho' ? 'st-on' : n.status === 'perdido' ? 'st-erro' : 'st-lead') + '">' + n.status + '</span></div>';
         }).join('') : '<p class="small muted" style="margin:0">Nenhum negócio.</p>');
         var tars = dados.tarefas.filter(function (t) { return t.feita !== 'SIM'; });
         h += '<h4 class="rot" style="margin:20px 0 8px">Tarefas abertas</h4>' + (tars.length ? '<div class="card">' + tars.map(linhaTarefa).join('') + '</div>' : '<p class="small muted" style="margin:0">Nenhuma tarefa aberta.</p>');
@@ -393,6 +417,7 @@
         h += '<div style="margin-top:18px">' + (dados.historico.length ? dados.historico.map(function (x) {
           return '<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--borda)"><div class="small muted nowrap" style="width:84px">' + C.fmtData(x.data) + '</div><div style="flex:1;min-width:0"><b class="small">' + esc(rotuloAcao(x.acao)) + '</b> <span class="small muted">por ' + esc(x.usuario_nome) + '</span>' + (x.detalhe ? '<div style="white-space:pre-wrap;font-size:13.5px">' + esc(x.detalhe) + '</div>' : '') + '</div></div>';
         }).join('') : '<p class="muted">Sem histórico ainda.</p>') + '</div>';
+        if (S.config.arquivo) h += '<div id="h-arq" style="margin-top:14px">' + (dados.arq || []).map(function (a) { return '<h4 class="rot" style="margin:16px 0 6px">' + ic('arquivo') + ' ' + esc(a.nome_mes || a.mes) + ' (arquivo)</h4>' + a.historico.slice().reverse().map(function (x) { return '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--borda)"><div class="small muted nowrap" style="width:84px">' + C.fmtData(x.data) + '</div><div class="small"><b>' + esc(rotuloAcao(x.acao)) + '</b> ' + esc(x.detalhe || '') + '</div></div>'; }).join('') + a.negocios.map(function (n) { return '<div class="dado small">' + ic('negocios') + esc(n.titulo) + ' · ' + C.brl(n.valor) + ' · ' + esc(n.status) + '</div>'; }).join(''); }).join('') + (dados.arqFim ? '<p class="small muted">Não há mais meses arquivados para este contato.</p>' : '<button class="btn peq" id="h-mais" data-carregando=" Buscando...">' + ic('arquivo') + ' Ver meses anteriores</button>') + '</div>';
       }
       h += '</div>';
       g.innerHTML = h;
@@ -400,7 +425,20 @@
       C.$$('[data-aba]', g).forEach(function (b) { b.onclick = function () { aba = b.dataset.aba; pintar(); }; });
       C.$$('[data-neg]', g).forEach(function (b) { b.onclick = function () { C.formNegocio(dados.negocios.filter(function (n) { return n.id === b.dataset.neg; })[0], function () { carregar(); }); }; });
       ligarTarefas(g, carregar);
+      C.$$('[data-reuniao]', g).forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); C.acoesReuniao(dados.negocios.filter(function (n) { return n.id === b.dataset.reuniao; })[0], carregar); }; });
+      var hm = g.querySelector('#h-mais');
+      if (hm) hm.onclick = function () {
+        C.comBotao(hm, function () {
+          return C.api('arquivo.contato', { contato_id: c.id, antes_de: dados.arqAntes || '' }).then(function (r) {
+            if (r.historico.length || r.negocios.length) dados.arq = (dados.arq || []).concat([r]);
+            dados.arqAntes = r.mes; dados.arqFim = !r.mais;
+            if (!r.historico.length && !r.negocios.length && r.mais) C.toast('Nada nos meses buscados. Clique de novo para ir mais para trás.');
+            pintar();
+          });
+        });
+      };
       var acoes = {
+        passar: function () { C.passarLead(c, function () { carregar(); C.recarregar(); }); },
         conversa: function () { fechar(); C.abrirConversa(c.id); },
         editar: function () { C.formContato(c, function () { carregar(); if (S.view === 'contatos') pintarLista(); }); },
         negocio: function () { C.formNegocio({ contato_id: c.id }, function () { carregar(); }); },
@@ -429,7 +467,7 @@
     carregar();
   };
   function rotuloAcao(a) {
-    return { contato_criado: 'Contato criado', contato_atualizado: 'Dados atualizados', tag: 'Tag', nota: 'Anotação', negocio_criado: 'Negócio criado', etapa: 'Mudou de etapa', tarefa: 'Tarefa criada', automacao: 'Automação', automacao_erro: 'Erro na automação', optout: 'Saiu da lista', atribuido: 'Atribuído', importacao: 'Importação' }[a] || a;
+    return { passado: 'Passado para closer', reuniao: 'Reunião', compra: 'Venda', comentario: 'Comentou no Instagram', integracao: 'Integração', arquivo: 'Arquivo mensal', contato_criado: 'Contato criado', contato_atualizado: 'Dados atualizados', tag: 'Tag', nota: 'Anotação', negocio_criado: 'Negócio criado', etapa: 'Mudou de etapa', tarefa: 'Tarefa criada', automacao: 'Automação', automacao_erro: 'Erro na automação', optout: 'Saiu da lista', atribuido: 'Atribuído', importacao: 'Importação' }[a] || a;
   }
 
   /* ============================================================= NEGÓCIOS */
@@ -461,7 +499,9 @@
   function cardNeg(n) {
     var c = C.contato(n.contato_id), u = C.usuario(n.responsavel_id);
     var parado = Math.round((Date.now() - (C.data(n.atualizado_em) || new Date()).getTime()) / 86400000);
-    return '<div class="neg" draggable="true" data-neg="' + n.id + '"><b>' + esc(n.titulo) + '</b><div class="small muted trunc">' + esc(c ? c.nome : '') + '</div>' +
+    var reu = n.reuniao_em && n.reuniao_status === 'agendada' ? '<div class="small reu-badge">' + ic('calendario') + ' ' + C.fmtData(n.reuniao_em) + '</div>' : n.reuniao_status === 'no_show' ? '<div class="small reu-badge falta">' + ic('alerta') + ' Faltou na reunião</div>' : '';
+    var sdr = n.sdr_id && C.usuario(n.sdr_id);
+    return '<div class="neg" draggable="true" data-neg="' + n.id + '"><b>' + esc(n.titulo) + '</b><div class="small muted trunc">' + esc(c ? c.nome : '') + (sdr ? ' · SDR ' + esc(C.primeiroNome(sdr.nome)) : '') + '</div>' + reu +
       '<div class="r"><span class="v">' + C.brl(n.valor) + '</span><span style="display:flex;gap:6px;align-items:center">' + (n.status === 'aberto' && parado >= 7 ? '<span class="status st-aviso" title="Sem movimento">' + parado + 'd</span>' : '') + (u ? C.av(u.nome, 'peq', u.cor) : '') + '</span></div></div>';
   }
   function ligarKanban(el) {
@@ -621,5 +661,47 @@
       C.$$('[data-ft]', el).forEach(function (b) { b.onclick = function () { filtroT = b.dataset.ft; C.render(); }; });
       ligarTarefas(el, function () { C.render(); });
     }
+  };
+
+  /* ---------------------------------------------------- SDR passa para closer */
+  C.passarLead = function (c, depois) {
+    var closers = S.usuarios.filter(function (u) { return u.perfil === 'closer' && u.ativo === 'SIM'; });
+    if (!closers.length) { C.toast(C.pode('equipe') ? 'Crie pelo menos um closer em Equipe e acessos.' : 'Ainda não há closers cadastrados. Fale com o administrador.', 'erro'); return; }
+    var aberto = S.negocios.filter(function (n) { return n.contato_id === c.id && n.status === 'aberto'; })[0];
+    var el = C.modal({
+      titulo: 'Passar ' + C.primeiroNome(c.nome) + ' para um closer',
+      corpo: '<p class="small muted" style="margin-top:0">O closer vira o responsável pelo contato e pelo negócio, recebe uma tarefa e você continua vendo o lead.</p>' +
+        '<div class="campo"><label>Closer</label><select class="inp" id="pl-closer"><option value="">Rodízio (quem tem menos leads em aberto)</option>' + closers.map(function (u) { return '<option value="' + u.id + '">' + esc(u.nome) + (u.recebe_leads === 'SIM' ? '' : ' (fora do rodízio)') + '</option>'; }).join('') + '</select></div>' +
+        '<div class="grade2"><div class="campo"><label>Reunião (opcional)</label><input class="inp" type="datetime-local" id="pl-reu"></div><div class="campo"><label>Valor estimado (R$)</label><input class="inp" id="pl-valor" inputmode="decimal" value="' + esc(aberto && C.num(aberto.valor) ? aberto.valor : '') + '"></div></div>' +
+        '<div class="campo"><label>Resumo da qualificação para o closer</label><textarea class="inp" id="pl-nota" rows="4" placeholder="Ex.: Tem orçamento, decide sozinho, quer começar este mês. Dor principal: ..."></textarea></div>' +
+        (S.config.passar_etapa && C.etapa(S.config.passar_etapa) ? '<p class="small muted">O negócio vai para a etapa <b>' + esc(C.etapa(S.config.passar_etapa).nome) + '</b>.</p>' : ''),
+      pe: '<button class="btn" data-fechar>Cancelar</button><button class="btn pri" id="pl-ok" data-carregando=" Passando...">' + ic('passar') + ' Passar lead</button>'
+    });
+    el.querySelector('#pl-ok').onclick = function () {
+      C.comBotao(this, function () {
+        return C.api('negocio.passar', { contato_id: c.id, closer_id: el.querySelector('#pl-closer').value, reuniao_em: el.querySelector('#pl-reu').value, valor: el.querySelector('#pl-valor').value, nota: el.querySelector('#pl-nota').value }).then(function (n) {
+          var u = C.usuario(n.responsavel_id);
+          el.fechar();
+          C.toast('Lead passado para ' + (u ? u.nome : 'o closer') + (n.reuniao_em ? '. Reunião marcada.' : ''), 'ok');
+          if (depois) depois(n);
+        });
+      });
+    };
+  };
+
+  /** Resultado da reunião (realizada / faltou / cancelada) ou remarcar. */
+  C.acoesReuniao = function (n, depois) {
+    if (!n) return;
+    var c = C.contato(n.contato_id);
+    var el = C.modal({
+      titulo: 'Reunião com ' + (c ? C.primeiroNome(c.nome) : ''),
+      corpo: '<p style="margin-top:0">Marcada para <b>' + C.fmtData(n.reuniao_em) + '</b>.</p><div style="display:grid;gap:8px">' +
+        '<button class="btn" data-st="realizada">' + ic('check') + ' Aconteceu</button><button class="btn" data-st="no_show">' + ic('usuarioX') + ' A pessoa faltou</button><button class="btn" data-st="cancelada">' + ic('x') + ' Foi cancelada</button></div>' +
+        '<div class="campo" style="margin-top:16px"><label>Ou remarcar para</label><div class="linha"><input class="inp" type="datetime-local" id="ra-q"><button class="btn pri" id="ra-ok" style="flex:0 0 auto" data-carregando=" Salvando...">Remarcar</button></div><span class="ajuda">O lead recebe um novo lembrete.</span></div>',
+      pe: '<button class="btn" data-fechar>Fechar</button>'
+    });
+    var feito = function (r) { el.fechar(); C.toast('Reunião atualizada', 'ok'); var i = S.negocios.findIndex(function (x) { return x.id === r.id; }); if (i >= 0) S.negocios[i] = r; if (depois) depois(r); };
+    C.$$('[data-st]', el).forEach(function (b) { b.onclick = function () { C.comBotao(b, function () { return C.api('negocio.reuniao', { id: n.id, status: b.dataset.st }).then(feito); }); }; });
+    el.querySelector('#ra-ok').onclick = function () { var q = el.querySelector('#ra-q').value; var b = this; C.comBotao(b, function () { if (!q) throw new Error('Escolha a nova data.'); return C.api('negocio.reuniao', { id: n.id, quando: q }).then(feito); }); };
   };
 })();

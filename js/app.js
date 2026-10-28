@@ -19,6 +19,7 @@
     { id: 'grupos', rot: 'Grupos e links', ic: 'grupos', perm: 'disparos' },
     { sec: 'Gestão', perm: 'relatorios' },
     { id: 'relatorios', rot: 'Relatórios', ic: 'relatorios', perm: 'relatorios' },
+    { id: 'equipe', rot: 'Equipe e acessos', ic: 'usuarioMais', perm: 'equipe' },
     { id: 'integracoes', rot: 'Integrações', ic: 'integracoes', perm: 'integracoes' },
     { id: 'ajustes', rot: 'Ajustes', ic: 'ajustes', perm: 'ajustes' }
   ];
@@ -61,7 +62,7 @@
       '<div class="campo"><label for="l-email">E-mail</label><input class="inp" id="l-email" type="email" autocomplete="username" required></div>' +
       '<div class="campo"><label for="l-senha">Senha</label><input class="inp" id="l-senha" type="password" autocomplete="current-password" required></div>' +
       '<button class="btn pri bloco" type="submit" data-carregando=" Entrando...">Entrar</button>' +
-      (C.ehDemo() ? '<div class="demo-dica"><b>Demonstração.</b> Administrador: <code>demo@prumo.app</code> · Atendente: <code>rafael@prumo.app</code><br>Senha: <code>demo1234</code></div>' : '') +
+      (C.ehDemo() ? '<div class="demo-dica"><b>Demonstração.</b> Administrador: <code>demo@prumo.app</code><br>SDR: <code>rafael@prumo.app</code> · Closer: <code>camila@prumo.app</code><br>Senha de todos: <code>demo1234</code></div>' : '') +
       '<p class="small" style="margin-top:18px;text-align:center"><a href="#" id="l-trocar">Trocar servidor</a>' + (C.ehDemo() ? ' · <a href="#" id="l-reset">Reiniciar demonstração</a>' : '') + '</p>' +
       '</form></div></div>';
     if (C.ehDemo()) { C.$('#l-email').value = 'demo@prumo.app'; C.$('#l-senha').value = 'demo1234'; }
@@ -241,7 +242,7 @@
       var cont = n.cont ? n.cont() : 0;
       h += '<button class="nav-a ' + (S.view === n.id ? 'on' : '') + '" data-ir="' + n.id + '">' + ic(n.ic) + '<span>' + n.rot + '</span>' + (cont ? '<span class="cont">' + cont + '</span>' : '') + '</button>';
     });
-    h += '<div class="side-pe"><button class="eu" id="b-eu">' + C.av(S.user.nome, 'peq', S.user.cor) + '<div class="trunc"><b class="trunc" style="font-size:13.5px">' + esc(S.user.nome) + '</b><small>' + ({ admin: 'Administrador', gestor: 'Gestor', atendente: 'Atendente' }[S.user.perfil] || '') + '</small></div></button></div>';
+    h += '<div class="side-pe"><button class="eu" id="b-eu">' + C.av(S.user.nome, 'peq', S.user.cor) + '<div class="trunc"><b class="trunc" style="font-size:13.5px">' + esc(S.user.nome) + '</b><small>' + (C.PERFIS[S.user.perfil] || {}).nome || '' + '</small></div></button></div>';
     side.innerHTML = h;
     C.$$('[data-ir]', side).forEach(function (b) { b.onclick = function () { C.ir(b.dataset.ir); }; });
     C.$('#b-eu').onclick = menuUsuario;

@@ -69,7 +69,7 @@
     box.innerHTML = l.slice(0, 300).map(function (c) {
       var nl = C.num(c.nao_lidas);
       var u = C.usuario(c.responsavel_id);
-      return '<button class="ib-item ' + (c.id === aberto ? 'on' : '') + '" data-c="' + c.id + '">' + C.av(c.nome) + '<div class="meio"><div class="l1"><b>' + esc(c.nome) + '</b><span class="hora">' + C.rel(c.ultima_msg_em) + '</span></div>' +
+      return '<button class="ib-item ' + (c.id === aberto ? 'on' : '') + (C.foraDoPrazo(c) ? ' atrasada' : '') + '" data-c="' + c.id + '">' + C.av(c.nome) + '<div class="meio"><div class="l1"><b>' + (c.canal === 'instagram' ? '<span class="canal-ig" title="Instagram">' + ic('instagram') + '</span>' : '') + esc(c.nome) + '</b><span class="hora">' + C.rel(c.ultima_msg_em) + '</span></div>' +
         '<div class="l2"><span>' + (c.ultima_direcao === 'out' ? ic('check2').replace('class="i ', 'class="i " style="width:14px;height:14px;color:#53BDEB" data-x="') : '') + esc(c.ultima_msg) + '</span>' + (nl ? '<span class="naolidas">' + nl + '</span>' : '') + '</div>' +
         (u || C.tags(c.tags).length ? '<div class="l2" style="margin-top:4px">' + (u ? '<span class="chip" style="flex:none">' + esc(C.primeiroNome(u.nome)) + '</span>' : '') + C.tags(c.tags).slice(0, 2).map(function (t) { return '<span class="chip" style="flex:none">' + esc(t) + '</span>'; }).join('') + '</div>' : '') +
         '</div></button>';
@@ -84,9 +84,11 @@
     var ib = C.$('#inbox'); if (ib) ib.classList.add('sem-info');
   }
 
+  var antigasAntes = '', antigasFim = false;
   function abrir(id) {
     aberto = id;
     msgs = [];
+    antigasAntes = ''; antigasFim = false;
     var ib = C.$('#inbox');
     ib.classList.add('com-chat');
     ib.classList.remove('sem-info');
@@ -110,7 +112,8 @@
   function pintarChat(c) {
     var ch = C.$('#chat');
     ch.innerHTML = '<div class="chat-cab"><button class="btn fantasma ic peq" id="ch-volta" aria-label="Voltar">' + ic('esq') + '</button>' + C.av(c.nome) +
-      '<div class="trunc" style="flex:1;cursor:pointer" id="ch-nome"><b class="trunc" style="display:block">' + esc(c.nome) + '</b><span class="small muted">' + esc(C.tel(c.telefone)) + '</span></div>' +
+      '<div class="trunc" style="flex:1;cursor:pointer" id="ch-nome"><b class="trunc" style="display:block">' + esc(c.nome) + '</b><span class="small muted">' + (c.canal === 'instagram' ? ic('instagram') + ' @' + esc(c.ig_usuario || 'Instagram') : esc(C.tel(c.telefone))) + '</span></div>' +
+      (C.pode('passar') ? '<button class="btn peq" id="ch-passar" title="Passar para um closer">' + ic('passar') + '<span class="txt"> Passar</span></button>' : '') +
       '<button class="btn peq" id="ch-robo"></button>' +
       '<button class="btn fantasma ic" id="ch-info" aria-label="Detalhes do contato">' + ic('info') + '</button></div>' +
       '<div id="ch-aviso"></div><div class="chat-msgs" id="ch-msgs"><div style="margin:auto"><span class="spin" style="color:var(--pri)"></span></div></div>' +
@@ -139,6 +142,7 @@
     C.$('#ch-env').onclick = function () { enviar(); };
     C.$('#ch-mod').onclick = function () { ta.value = '/'; rapidas(); ta.focus(); };
     C.$('#ch-anexo').onclick = anexar;
+    if (C.$('#ch-passar')) C.$('#ch-passar').onclick = function () { C.passarLead(c, function () { C.recarregar(); }); };
     pintarCabRobo();
     if (w) setTimeout(function () { ta.focus(); }, 50);
   }
@@ -155,7 +159,40 @@
       C.api('contato.robo', { id: c.id, pausar: !pausado }).then(function (r) { c.bot_pausado_ate = r.bot_pausado_ate; pintarCabRobo(); C.toast(r.bot_pausado_ate ? 'Robô pausado para este contato' : 'Robô reativado', 'ok'); }).catch(function (e) { C.toast(e.message, 'erro'); });
     };
     var av = C.$('#ch-aviso');
-    if (av) av.innerHTML = c.optout === 'SIM' ? '<div class="robo-pausado">' + ic('alerta') + ' Este contato pediu para não receber mensagens automáticas. Você ainda pode responder manualmente.</div>' : '';
+    if (av) av.innerHTML = (c.optout === 'SIM' ? '<div class="robo-pausado">' + ic('alerta') + ' Este contato pediu para não receber mensagens automáticas. Você ainda pode responder manualmente.</div>' : '') + avisoJanela(c);
+    var bm = C.$('#ch-modelo'); if (bm) bm.onclick = function () { enviarModelo(c); };
+  }
+
+  /** Janela de 24h: na API oficial da Meta e no Instagram só dá para responder livremente dentro dela. */
+  function avisoJanela(c) {
+    var meta = S.waStatus && S.waStatus.provedor === 'meta';
+    var ig = c.canal === 'instagram';
+    if (!meta && !ig) return '';
+    var agora = C.isoLocal();
+    var ult = C.data(c.ultima_msg_em);
+    var ate = c.janela_ate || (c.ultima_direcao === 'in' && ult ? C.isoLocal(new Date(ult.getTime() + 86400000)) : '');
+    if (!ig && c.gratis_ate && c.gratis_ate > agora) return '<div class="janela gratis">' + ic('estrela') + ' Veio de anúncio: mensagens grátis até ' + C.fmtData(c.gratis_ate) + '</div>';
+    if (ate && ate > agora) return '<div class="janela aberta">' + ic('relogio') + ' Janela de 24h aberta até ' + C.fmtData(ate) + (ig ? '' : '. Respostas aqui são mensagens de atendimento, as mais baratas.') + '</div>';
+    if (ig) return '<div class="janela fechada">' + ic('alerta') + ' O Instagram só deixa responder até 24 horas depois da última mensagem da pessoa. Espere ela escrever de novo.</div>';
+    return '<div class="janela fechada">' + ic('alerta') + ' Janela de 24h fechada. Para falar com esta pessoa, envie um modelo aprovado pela Meta. <button class="btn peq" id="ch-modelo">' + ic('nota') + ' Enviar modelo</button></div>';
+  }
+  function enviarModelo(c) {
+    var el = C.modal({
+      titulo: 'Enviar modelo da Meta',
+      corpo: '<p class="small muted" style="margin-top:0">Use o nome exato do modelo aprovado no Gerenciador do WhatsApp. Quando a pessoa responder, a janela de 24h abre e você conversa normalmente.</p>' +
+        '<div class="grade2"><div class="campo"><label>Nome do modelo</label><input class="inp" id="mm-nome" placeholder="retomar_contato"></div><div class="campo"><label>Idioma</label><input class="inp" id="mm-idioma" value="pt_BR"></div></div>' +
+        '<div class="campo"><label>Variáveis do modelo, na ordem (separe por vírgula)</label><input class="inp" id="mm-vars" value="{primeiro_nome}"></div>' +
+        '<div class="campo"><label>Categoria</label><select class="inp" id="mm-cat"><option value="utility">Utilidade (mais barato: confirmação, lembrete, retorno de pedido)</option><option value="marketing">Marketing (oferta, novidade)</option></select></div>',
+      pe: '<button class="btn" data-fechar>Cancelar</button><button class="btn verde" id="mm-ok" data-carregando=" Enviando...">' + ic('enviar') + ' Enviar</button>'
+    });
+    el.querySelector('#mm-ok').onclick = function () {
+      var nome = el.querySelector('#mm-nome').value.trim();
+      C.comBotao(this, function () {
+        if (!nome) throw new Error('Informe o nome do modelo.');
+        return C.api('mensagem.enviar', { id: c.id, texto: '', meta_modelo: { nome: nome, idioma: el.querySelector('#mm-idioma').value.trim() || 'pt_BR', variaveis: el.querySelector('#mm-vars').value, categoria: el.querySelector('#mm-cat').value } })
+          .then(function () { el.fechar(); C.toast('Modelo enviado', 'ok'); abrir(c.id); });
+      });
+    };
   }
 
   function pintarMsgs(rolar) {
@@ -164,7 +201,8 @@
     var noFim = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     var dia = '';
     var h = '';
-    if (!msgs.length) h = '<div class="dia-sep">Nenhuma mensagem ainda. Envie a primeira.</div>';
+    if (S.config.arquivo && !antigasFim) h += '<div style="text-align:center;margin:4px 0 10px"><button class="btn peq" id="ch-antigas" data-carregando=" Buscando...">' + ic('arquivo') + ' Ver meses anteriores</button></div>';
+    if (!msgs.length) h += '<div class="dia-sep">Nenhuma mensagem ainda. Envie a primeira.</div>';
     msgs.forEach(function (m) {
       var d = (m.criado_em || '').slice(0, 10);
       if (d !== dia) { dia = d; h += '<div class="dia-sep">' + (d === C.hoje() ? 'Hoje' : d === C.diasAtras(1) ? 'Ontem' : C.fmtData(m.criado_em, false)) + '</div>'; }
@@ -182,6 +220,18 @@
     });
     box.innerHTML = h;
     if (!rolar || noFim) box.scrollTop = box.scrollHeight;
+    var ba = C.$('#ch-antigas');
+    if (ba) ba.onclick = function () {
+      var id = aberto;
+      C.comBotao(ba, function () {
+        return C.api('arquivo.contato', { contato_id: id, antes_de: antigasAntes }).then(function (r) {
+          if (aberto !== id) return;
+          antigasAntes = r.mes; antigasFim = !r.mais;
+          if (r.mensagens.length) { msgs = r.mensagens.concat(msgs); pintarMsgs(true); C.$('#ch-msgs').scrollTop = 0; }
+          else { C.toast(r.mais ? 'Nada nesses meses. Clique de novo para ir mais para trás.' : 'Não há mensagens mais antigas.'); pintarMsgs(true); }
+        });
+      });
+    };
   }
   /** Links clicáveis e a formatação do WhatsApp (*negrito* e _itálico_). Recebe texto já escapado. */
   function linkify(s) {
@@ -268,8 +318,10 @@
     if (!box || !c) return;
     var negs = S.negocios.filter(function (n) { return n.contato_id === c.id && n.status === 'aberto'; });
     var cp = C.json(c.campos, {});
-    box.innerHTML = '<div style="text-align:center">' + C.av(c.nome, 'gde') + '<h3 style="margin-top:8px;font-size:16px">' + esc(c.nome) + '</h3><div class="small muted">' + esc(C.tel(c.telefone)) + '</div>' +
+    box.innerHTML = '<div style="text-align:center">' + C.av(c.nome, 'gde') + '<h3 style="margin-top:8px;font-size:16px">' + esc(c.nome) + '</h3><div class="small muted">' + esc(C.tel(c.telefone)) + (c.ig_usuario ? ' @' + esc(c.ig_usuario) : '') + '</div>' +
       '<button class="btn peq" style="margin-top:10px" id="in-ficha">' + ic('externo') + ' Abrir ficha completa</button></div>' +
+      (C.pode('passar') ? '<button class="btn peq acc bloco" style="margin-top:12px" id="in-passar">' + ic('passar') + ' Passar para closer</button>' : '') +
+      negs.filter(function (n) { return n.reuniao_em && n.reuniao_status === 'agendada'; }).map(function (n) { return '<div class="reu-badge" style="margin-top:10px;cursor:pointer" data-reu="' + n.id + '">' + ic('calendario') + ' Reunião ' + C.fmtData(n.reuniao_em) + '</div>'; }).join('') +
       '<h4>Responsável</h4><select class="inp" id="in-resp"' + (C.pode('todos') ? '' : ' disabled') + '><option value="">Ninguém</option>' + S.usuarios.filter(function (u) { return u.ativo === 'SIM'; }).map(function (u) { return '<option value="' + u.id + '"' + (c.responsavel_id === u.id ? ' selected' : '') + '>' + esc(u.nome) + '</option>'; }).join('') + '</select>' +
       '<h4>Tags</h4><div id="in-tags"></div><button class="btn peq" style="margin-top:6px" id="in-salvatags">Salvar tags</button>' +
       '<h4>Funil</h4>' + (negs.length ? negs.map(function (n) {
@@ -281,6 +333,8 @@
       '<div style="height:20px"></div>';
     var tg = C.campoTags(box.querySelector('#in-tags'), C.tags(c.tags), C.todasTags());
     box.querySelector('#in-ficha').onclick = function () { C.abrirContato(c.id); };
+    var ip = box.querySelector('#in-passar'); if (ip) ip.onclick = function () { C.passarLead(c, function () { C.recarregar(); }); };
+    C.$$('[data-reu]', box).forEach(function (b) { b.onclick = function () { C.acoesReuniao(S.negocios.filter(function (n) { return n.id === b.dataset.reu; })[0], function () { pintarInfo(); }); }; });
     box.querySelector('#in-salvatags').onclick = function () {
       var btn = this;
       C.comBotao(btn, function () { return C.api('contato.salvar', { contato: { id: c.id, tags: tg.valor() } }).then(function (s) { Object.assign(c, s); C.toast('Tags salvas', 'ok'); pintarLista(); }); });

@@ -122,7 +122,9 @@
         '<div class="chips" style="margin-top:4px">' + ['{primeiro_nome}', '{saudacao}', '{minha_empresa}', '{Oi|Olá|E aí}'].map(function (v) { return '<button type="button" class="chip" data-var="' + v + '">' + v + '</button>'; }).join('') + '</div></div>' +
         '<div class="grade2"><div class="campo"><label>Mídia (opcional)</label><select class="inp" id="d-mtipo">' + [['', 'Só texto'], ['image', 'Imagem'], ['video', 'Vídeo'], ['audio', 'Áudio'], ['document', 'Documento']].map(function (o) { return '<option value="' + o[0] + '"' + ((c.midia_tipo || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
         '<div class="campo"><label>Link público da mídia</label><input class="inp" id="d-murl" value="' + esc(c.midia_url || '') + '" placeholder="https://..."></div></div>' +
-        (ehMeta ? '<div class="campo"><label>Modelo aprovado na Meta (obrigatório fora da janela de 24h)</label><div class="grade2"><input class="inp" id="d-meta" placeholder="nome_do_modelo" value="' + esc(meta.nome || '') + '"><input class="inp" id="d-metaidioma" placeholder="pt_BR" value="' + esc(meta.idioma || 'pt_BR') + '"></div><input class="inp" style="margin-top:6px" id="d-metavars" placeholder="Variáveis {{1}}, {{2}}... separadas por ; ex.: {primeiro_nome};{minha_empresa}" value="' + esc((meta.variaveis || []).join(';')) + '"></div>' : '') +
+        (ehMeta ? '<div class="campo"><label>Modelo aprovado na Meta (obrigatório fora da janela de 24h)</label><div class="grade2"><input class="inp" id="d-meta" placeholder="nome_do_modelo" value="' + esc(meta.nome || '') + '"><input class="inp" id="d-metaidioma" placeholder="pt_BR" value="' + esc(meta.idioma || 'pt_BR') + '"></div><input class="inp" style="margin-top:6px" id="d-metavars" placeholder="Variáveis {{1}}, {{2}}... separadas por ; ex.: {primeiro_nome};{minha_empresa}" value="' + esc((meta.variaveis || []).join(';')) + '">' +
+          '<div class="grade2" style="margin-top:6px"><select class="inp" id="d-metacat"><option value="marketing"' + (meta.categoria !== 'utility' ? ' selected' : '') + '>Categoria: Marketing</option><option value="utility"' + (meta.categoria === 'utility' ? ' selected' : '') + '>Categoria: Utilidade</option></select>' +
+          '<label class="check" style="margin:0"><input type="checkbox" id="d-eco"' + (c.economia !== 'NAO' ? ' checked' : '') + '> Economia: janela aberta recebe texto comum</label></div></div>' : '') +
         '<div class="grade2"><div class="campo"><label>Velocidade</label><select class="inp" id="d-vel">' + Object.keys(VEL).map(function (k) { return '<option value="' + k + '"' + ((c.velocidade || 'normal') === k ? ' selected' : '') + '>' + VEL[k][0] + '</option>'; }).join('') + '</select><span class="ajuda" id="d-velaj"></span></div>' +
         '<div class="campo"><label>Agendar para (opcional)</label><input class="inp" type="datetime-local" id="d-agenda" value="' + esc((c.agendar_em || '').slice(0, 16)) + '"></div></div>' +
         '<span class="rot">Prévia</span><div class="preview-wa" style="margin-top:6px"><div class="msg out" id="d-prev" style="max-width:100%"></div></div>' +
@@ -143,10 +145,20 @@
     var contar = C.debounce(function () {
       var box = el.querySelector('#d-total');
       if (!box || !box.isConnected) return;
+      if (ehMeta) {
+        var cat = el.querySelector('#d-metacat') ? el.querySelector('#d-metacat').value : 'marketing';
+        var eco = !el.querySelector('#d-eco') || el.querySelector('#d-eco').checked;
+        C.api('campanha.custo', { filtro: ler(), categoria: cat }).then(function (r) {
+          box.innerHTML = ic('dinheiro') + '<div><b>' + C.inteiro(r.total) + '</b> contatos vão receber. ' +
+            (eco ? r.janela + ' com a janela de 24h aberta (texto comum), ' + r.gratis + ' em período grátis de anúncio e ' + r.modelo + ' precisam do modelo pago. Custo estimado: <b>' + C.brl(r.com_economia) + '</b>' + (r.sem_economia > r.com_economia ? ' (sem a economia seria ' + C.brl(r.sem_economia) + ')' : '') + '.'
+              : 'Todos recebem o modelo. Custo estimado: <b>' + C.brl(r.sem_economia) + '</b>.') + '</div>';
+        }).catch(function () { });
+        return;
+      }
       C.api('contato.publico', { filtro: ler() }).then(function (r) { box.innerHTML = ic('contatos') + '<div><b>' + C.inteiro(r.total) + '</b> contatos vão receber (com telefone e sem pedido de saída).</div>'; }).catch(function () { });
     }, 400);
     el.addEventListener('input', function (e) { if (e.target.closest('#d-pub-contatos')) contar(); });
-    el.addEventListener('change', function (e) { if (e.target.closest('#d-pub-contatos')) contar(); });
+    el.addEventListener('change', function (e) { if (e.target.closest('#d-pub-contatos') || e.target.id === 'd-eco' || e.target.id === 'd-metacat') contar(); });
     el.addEventListener('keyup', function (e) { if (e.key === 'Enter' && e.target.closest('#d-pub-contatos')) contar(); });
     contar();
     C.$$('[data-dest]', el).forEach(function (b) {
@@ -180,7 +192,8 @@
         if (d.midia_url && !/^https:\/\//.test(d.midia_url)) throw new Error('O link da mídia precisa começar com https://');
         if (d.midia_url && !d.midia_tipo) d.midia_tipo = 'image';
         if (destino === 'grupos' && !d.grupos.length) throw new Error('Escolha pelo menos um grupo.');
-        if (el.querySelector('#d-meta') && el.querySelector('#d-meta').value.trim()) d.meta_modelo = { nome: el.querySelector('#d-meta').value.trim(), idioma: el.querySelector('#d-metaidioma').value.trim() || 'pt_BR', variaveis: el.querySelector('#d-metavars').value.split(';').map(function (x) { return x.trim(); }).filter(Boolean) };
+        if (el.querySelector('#d-meta') && el.querySelector('#d-meta').value.trim()) d.meta_modelo = { nome: el.querySelector('#d-meta').value.trim(), idioma: el.querySelector('#d-metaidioma').value.trim() || 'pt_BR', variaveis: el.querySelector('#d-metavars').value.split(';').map(function (x) { return x.trim(); }).filter(Boolean), categoria: el.querySelector('#d-metacat').value };
+        if (el.querySelector('#d-eco')) d.economia = el.querySelector('#d-eco').checked ? 'SIM' : 'NAO';
         return C.api('campanha.salvar', { campanha: d }).then(function (r) {
           var i = S.campanhas.findIndex(function (x) { return x.id === r.id; });
           if (i >= 0) S.campanhas[i] = r; else S.campanhas.push(r);

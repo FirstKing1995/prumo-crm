@@ -349,7 +349,7 @@ table.tab { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .passos-tut { counter-reset: p; padding: 0; margin: 0; list-style: none; }
 .passos-tut li { counter-increment: p; position: relative; padding: 0 0 16px 40px; }
 .passos-tut li::before { content: counter(p); position: absolute; left: 0; top: -2px; width: 26px; height: 26px; border-radius: 50%; background: var(--pri); color: var(--pri-txt); font-weight: 700; font-size: 13px; display: grid; place-items: center; }
-.passos-tut li b { display: block; margin-bottom: 2px; }
+.passos-tut li > b:first-child { display: block; margin-bottom: 2px; }
 .copiavel { display: flex; gap: 6px; align-items: center; }
 .copiavel code, code.bloco { flex: 1; min-width: 0; display: block; background: #0F172A; color: #E2E8F0; padding: 9px 12px; border-radius: 8px; font-size: 12.5px; overflow-x: auto; white-space: nowrap; font-family: ui-monospace, Consolas, monospace; }
 code.bloco { white-space: pre; }
@@ -428,3 +428,38 @@ code.bloco { white-space: pre; }
   .previa-marca { grid-template-columns: 90px 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- equipe comercial, metas e reuniões ---------- */
+.perfis-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.perfil-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.perfil-card p { margin: 0; font-size: 13px; color: var(--txt-2); flex: 1; }
+.perfil-cab { display: flex; justify-content: space-between; align-items: center; }
+.perfil-opcoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.perfil-op { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--borda); border-radius: var(--raio-sm); cursor: pointer; }
+.perfil-op:has(input:checked) { border-color: var(--pri); background: var(--pri-soft); }
+.perfil-op input { margin-top: 3px; accent-color: var(--pri); }
+.perfil-op span { display: flex; flex-direction: column; gap: 2px; }
+.perfil-op small { color: var(--txt-2); font-size: 12px; line-height: 1.35; }
+.chip.perfil-sdr { background: var(--roxo-soft); color: var(--roxo); }
+.chip.perfil-closer { background: var(--verde-soft); color: var(--verde); }
+.chip.perfil-admin { background: var(--pri-soft); color: var(--pri); }
+.meta-barra { height: 8px; background: var(--borda); border-radius: 99px; overflow: hidden; flex: 1; min-width: 60px; }
+.meta-barra > div { height: 100%; background: var(--pri); border-radius: 99px; }
+.meta-barra.grande { height: 12px; }
+.meta-cel { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.reu-badge { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; padding: 3px 8px; border-radius: 99px; background: var(--pri-soft); color: var(--pri); font-weight: 600; }
+.reu-badge .i { width: 13px; height: 13px; }
+.reu-badge.falta { background: var(--vermelho-soft); color: var(--vermelho); }
+.btn.bloco { width: 100%; justify-content: center; }
+
+/* ---------- conversas: prazo, Instagram e janela de 24h ---------- */
+.ib-item.atrasada { border-left-color: var(--vermelho); background: var(--vermelho-soft); }
+.ib-item.atrasada .hora { color: var(--vermelho); font-weight: 700; }
+.canal-ig { display: inline-flex; color: #C13584; margin-right: 4px; vertical-align: -2px; }
+.canal-ig .i { width: 14px; height: 14px; }
+.janela { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 7px 12px; font-size: 12.5px; }
+.janela .i { width: 15px; height: 15px; flex: none; }
+.janela.aberta { background: var(--verde-soft); color: #166534; }
+.janela.gratis { background: var(--acc-soft); color: #854D0E; }
+.janela.fechada { background: var(--vermelho-soft); color: #991B1B; }
+.janela.fechada .btn { margin-left: auto; }
