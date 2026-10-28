@@ -6,7 +6,7 @@
    ========================================================================== */
 (function () {
   'use strict';
-  var CHAVE = 'prumo_demo_v2';
+  var CHAVE = 'prumo_demo_v3';
   var db = null;
 
   function carregar() {
@@ -75,10 +75,25 @@
       }
       return { code: 200, text: '{}' };
     },
-    urlApp: function () { return 'https://script.google.com/macros/s/SEU-ID-DEMO/exec'; }
+    urlApp: function () { return 'https://script.google.com/macros/s/SEU-ID-DEMO/exec'; },
+    // e-mail simulado: nada sai de verdade; parte das pessoas "abre" e "clica" sozinha
+    email: {
+      gmail: function (m) { simularLeitura(m.html); },
+      cotaGmail: function () { return 100; }
+    }
   };
 
   var L = null;
+  function simularLeitura(html) {
+    var m = String(html || '').match(/t=o&amp;f=([\w-]+)&amp;s=([0-9a-f]+)/);
+    if (!m || Math.random() > 0.6) return;
+    setTimeout(function () {
+      try {
+        if (Math.random() < 0.4) L.receberRastreio({ t: 'c', f: m[1], s: m[2], u: 'https://exemplo.com.br/oferta' });
+        else L.receberRastreio({ t: 'o', f: m[1], s: m[2] });
+      } catch (e) { console.warn(e); }
+    }, 4000 + Math.random() * 12000);
+  }
   var RESPOSTAS = ['Oi! Tudo bem sim', 'Quero saber mais', 'Qual o valor?', '1', 'Pode me mandar mais detalhes?', 'Obrigado!', 'Vou ver e te retorno', 'Tenho interesse sim'];
   function agendarResposta(numero, texto) {
     if (Math.random() < 0.35) return;
@@ -108,7 +123,8 @@
       WA_PROVEDOR: 'evolution', EVOLUTION_URL: 'https://evolution.demo', EVOLUTION_APIKEY: 'demo', EVOLUTION_INSTANCIA: 'demo',
       HORARIO_INICIO: '00:00', HORARIO_FIM: '23:59', DIAS_ENVIO: '0,1,2,3,4,5,6',
       CAMPOS_PERSONALIZADOS: JSON.stringify([{ chave: 'interesse', rotulo: 'Interesse', tipo: 'texto' }, { chave: 'aniversario', rotulo: 'Aniversário', tipo: 'data' }]),
-      TAGS: 'Lead quente, Cliente, Indicação, Retornar, Pacote mensal', ARQUIVO_FEITO: iso(new Date()).slice(0, 7)
+      TAGS: 'Lead quente, Cliente, Indicação, Retornar, Pacote mensal', ARQUIVO_FEITO: iso(new Date()).slice(0, 7),
+      EMAIL_NOME: 'Studio Aurora', EMAIL_RODAPE: 'Studio Aurora - Rua das Flores, 120 - São Paulo/SP'
     });
     L.semear({ nome: 'Marina Costa', email: 'demo@prumo.app', senha: 'demo1234' });
     var salt = uuid();
@@ -204,6 +220,13 @@
       velocidade: 'normal', status: 'concluida', total: '9', enviados: '9', erros: '0', respostas: '4', criado_por: 'Marina Costa',
       criado_em: iso(new Date(agora - 5 * 86400000)), iniciada_em: iso(new Date(agora - 5 * 86400000)), concluida_em: iso(new Date(agora - 5 * 86400000 + 900000))
     });
+    // e-mail marketing de exemplo
+    var blocos = JSON.stringify([{ tipo: 'titulo', texto: '{primeiro_nome}, sua pele merece um cuidado especial' }, { tipo: 'texto', texto: 'Neste mês, a limpeza de pele completa sai com *20% de desconto* para quem já é nosso contato.\n\nSão 60 minutos de cuidado, com avaliação personalizada.' }, { tipo: 'botao', texto: 'Quero agendar', url: 'https://exemplo.com.br/agendar' }, { tipo: 'texto', texto: 'Qualquer dúvida, é só responder este e-mail.' }]);
+    P.inserirVarios('Emails', [
+      { id: 'EM1', nome: 'Promoção de outubro', tipo: 'campanha', assunto: '{primeiro_nome}, 20% na limpeza de pele', assunto_b: 'Seu desconto de outubro chegou', preheader: 'Só para quem já é nosso contato', blocos: blocos, filtro: '{}', status: 'concluida', total: '30', enviados: '30', enviados_b: '15', aberturas: '17', aberturas_b: '10', cliques: '6', descadastros: '1', erros: '0', criado_por: 'Marina Costa', criado_em: iso(new Date(agora - 6 * 86400000)), iniciada_em: iso(new Date(agora - 6 * 86400000)), concluida_em: iso(new Date(agora - 6 * 86400000 + 3600000)) },
+      { id: 'EM2', nome: 'Boas-vindas por e-mail', tipo: 'automacao', assunto: 'Bem-vindo(a) ao Studio Aurora, {primeiro_nome}', preheader: 'Tudo o que você precisa saber', blocos: JSON.stringify([{ tipo: 'titulo', texto: 'Que bom ter você aqui, {primeiro_nome}!' }, { tipo: 'texto', texto: 'Separamos nossos tratamentos mais procurados para você conhecer.' }, { tipo: 'botao', texto: 'Ver tratamentos', url: 'https://exemplo.com.br/tratamentos' }]), filtro: '{}', status: 'ativo', total: '0', enviados: '0', aberturas: '0', cliques: '0', descadastros: '0', erros: '0', criado_por: 'Marina Costa', criado_em: P.agora() }
+    ]);
+    P.inserir('Automacoes', { id: 'A9', nome: 'Boas-vindas por e-mail para lead do site', ativo: 'SIM', gatilho: JSON.stringify({ tipo: 'webhook', origem: '' }), passos: JSON.stringify([{ id: 'e1', tipo: 'email', email_id: 'EM2' }, { id: 'e2', tipo: 'esperar', valor: 2, unidade: 'dias' }, { id: 'e3', tipo: 'condicao', se: 'email', op: 'nao_abriu', valor: 'EM2', sim: 'e4', nao: 'fim' }, { id: 'e4', tipo: 'mensagem', texto: 'Oi {primeiro_nome}! Te mandei um e-mail com nossos tratamentos. Quer que eu te mande por aqui?' }]), uma_vez: 'SIM', disparos: '0', concluidas: '0', criado_em: P.agora(), atualizado_em: P.agora() });
     // deixa as automações de exemplo ligadas na demonstração
     t('Automacoes').forEach(function (a, i) { if (i < 2) a.ativo = 'SIM'; });
     salvar();

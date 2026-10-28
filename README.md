@@ -14,6 +14,7 @@ Sistema white label: cada empresa troca nome, logo e cores pelo próprio sistema
 | Negócios | Vários funis, kanban com arrastar e soltar, ganho/perdido com motivo, negócios parados |
 | Tarefas | Prazos, atrasadas, tarefas criadas pelos robôs |
 | Automações | Gatilhos (primeira mensagem, palavra-chave, novo contato, webhook, tag, etapa, comentário no Instagram, evento de venda, manual) e 20 tipos de passo, incluindo menu com botões, formulário (WhatsApp Flows na API oficial), pontuação de lead, passar para closer, responder comentário e enviar ao ActiveCampaign. 11 modelos prontos |
+| E-mail marketing | Campanhas com editor por blocos e prévia, teste A/B de assunto, agendamento, e-mails de automação, aberturas e cliques, descadastro automático, rastreio de visitas ao site. Envio grátis pelo Gmail da conta (e Brevo grátis para somar volume) |
 | Disparos | Público por tags/etapas/status/origem/datas, spintax `{Oi\|Olá}`, mídia, agendamento, velocidade anti-bloqueio, horário comercial, descadastro automático (SAIR), envio assistido sem API, modelos da Meta |
 | Grupos | Importação dos grupos do WhatsApp, disparo para grupos, link inteligente que troca de grupo quando lota |
 | Relatórios | Contatos por origem, mensagens por dia, tempo de resposta, conversão, motivos de perda, SDRs e closers com metas, custo estimado da API oficial, disparos e automações. Inclui meses arquivados |
@@ -70,6 +71,7 @@ A página de vendas e o pagamento ficam fora deste projeto, na pasta `prumo-vend
 - [Equipe comercial: SDR e closer](docs/EQUIPE_COMERCIAL.md)
 - [Economia na API oficial da Meta](docs/ECONOMIA_API_OFICIAL.md)
 - [Arquivo mensal](docs/ARQUIVO_MENSAL.md)
+- [E-mail marketing](docs/EMAIL_MARKETING.md)
 - [Análise de concorrentes e próximos passos](ANALISE_CONCORRENTES.md) (interno)
 
 ## Referências estudadas

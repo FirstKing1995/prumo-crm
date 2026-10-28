@@ -230,6 +230,15 @@ var PLAT = {
       });
     }
   },
+  /** E-mail pelo Gmail da conta que instalou (grátis, dentro da cota diária do Google). */
+  email: {
+    gmail: function (m) {
+      var o = { to: m.para, subject: m.assunto, htmlBody: m.html, body: m.texto || '', name: m.nome || '' };
+      if (m.responder) o.replyTo = m.responder;
+      MailApp.sendEmail(o);
+    },
+    cotaGmail: function () { return MailApp.getRemainingDailyQuota(); }
+  },
   dormir: function (ms) { Utilities.sleep(ms); },
   urlPlanilha: function () { return SpreadsheetApp.getActiveSpreadsheet().getUrl(); },
   urlApp: function () {
@@ -264,6 +273,23 @@ function doGet(e) {
     var cfg = logica_().cfg();
     if (p['hub.verify_token'] && p['hub.verify_token'] === cfg.META_VERIFY) return ContentService.createTextOutput(p['hub.challenge'] || '');
     return ContentService.createTextOutput('token invalido');
+  }
+  // E-mail: abertura (?t=o), clique (?t=c) e descadastro (?t=sair)
+  if (p.t === 'o') {
+    try { comTrava_(function () { return logica_().receberRastreio(p); }); } catch (e) { /* nunca quebra a imagem */ }
+    return ContentService.createTextOutput('');
+  }
+  if (p.t === 'c') {
+    var rc = {};
+    try { rc = comTrava_(function () { return logica_().receberRastreio(p); }); } catch (e) { rc = { url: /^https?:\/\//i.test(String(p.u || '')) ? p.u : '' }; }
+    var destino = String(rc.url || '').replace(/"/g, '%22');
+    return HtmlService.createHtmlOutput('<div style="font-family:sans-serif;text-align:center;padding:40px">' + (destino ? '<p>Abrindo o link...</p><a target="_top" style="display:inline-block;background:#1F6FEB;color:#fff;padding:14px 22px;border-radius:10px;text-decoration:none;font-weight:bold" href="' + destino + '">Continuar</a><script>try{window.top.location.href=' + JSON.stringify(destino) + '}catch(e){}</script>' : '<p>Link inválido.</p>') + '</div>');
+  }
+  if (p.t === 'sair') {
+    var f = String(p.f || '').replace(/[^\w-]/g, ''), s = String(p.s || '').replace(/[^\w]/g, '');
+    return HtmlService.createHtmlOutput('<div style="font-family:sans-serif;max-width:420px;margin:40px auto;text-align:center"><h2>Não receber mais e-mails</h2><p>Confirme para sair da nossa lista. Você pode voltar quando quiser.</p>' +
+      '<button id="b" style="background:#DC2626;color:#fff;border:0;padding:14px 22px;border-radius:10px;font-weight:bold;cursor:pointer" onclick="this.disabled=true;this.textContent=\'Saindo...\';google.script.run.withSuccessHandler(function(r){document.body.innerHTML=\'<div style=&quot;font-family:sans-serif;text-align:center;padding:40px&quot;><h2>Pronto</h2><p>Você não vai mais receber nossos e-mails.</p></div>\'}).withFailureHandler(function(){document.getElementById(\'b\').textContent=\'Tente de novo\';document.getElementById(\'b\').disabled=false}).sairDaLista(\'' + f + '\',\'' + s + '\')">Confirmar</button></div>')
+      .setTitle('Descadastro');
   }
   // Link inteligente de grupos: ...exec?g=nome-do-link  (redireciona para o grupo com vaga)
   if (p.g) {
@@ -303,6 +329,11 @@ function doPost(e) {
     var msg = err && err.message ? err.message : String(err);
     return json_({ ok: false, error: msg, auth: msg === 'SESSAO_EXPIRADA' });
   }
+}
+
+/** Chamado pela página de descadastro (?t=sair). O link é assinado: não dá para descadastrar outra pessoa. */
+function sairDaLista(f, s) {
+  return comTrava_(function () { return logica_().receberRastreio({ t: 'sair', f: f, s: s }); });
 }
 
 /** Gatilho de 1 minuto: envia disparos e acorda automações que estavam esperando. */

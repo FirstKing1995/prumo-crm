@@ -78,6 +78,10 @@ Configuração em **Integrações > Instagram Direct e comentários** (o tutoria
 - O gatilho **Comentou no Instagram** inicia uma automação quando alguém comenta uma palavra num post. O passo **Responder comentário** responde em público, e a primeira mensagem do fluxo vai como resposta privada no Direct.
 - Menus dos robôs viram botões de resposta rápida.
 
+## E-mail marketing e rastreio do site
+
+Envio pelo Gmail e pelo Brevo, campanhas, automações por e-mail e o código de rastreio do site estão em `docs/EMAIL_MARKETING.md`.
+
 ## API do sistema
 
 Para programadores, n8n, Make ou Zapier mandarem comandos para o CRM. Ligue em **Integrações > API do sistema** (gera uma chave secreta). Não publique essa URL: com ela é possível mandar mensagens pelo seu WhatsApp.

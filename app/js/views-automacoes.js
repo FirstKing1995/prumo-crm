@@ -15,6 +15,9 @@
     etapa: ['Mudou de etapa', 'Quando um negócio entra numa etapa do funil'],
     comentario: ['Comentou no Instagram', 'Quando alguém comenta uma palavra num post: a resposta vai para o Direct'],
     evento: ['Evento de venda', 'Hotmart ou Kiwify: compra, carrinho abandonado, boleto, Pix, reembolso'],
+    email_aberto: ['Abriu um e-mail', 'Quando o contato abre um e-mail (de campanha ou de automação)'],
+    email_clicou: ['Clicou num e-mail', 'Quando o contato clica num link de e-mail'],
+    visitou: ['Visitou o site', 'Quando um contato conhecido visita uma página do seu site'],
     manual: ['Manual', 'Só quando alguém inicia (na ficha, em massa ou por outra automação)']
   };
   var TIPOS = {
@@ -34,6 +37,7 @@
     passar: ['Passar para closer', 'passar', 'c-humano', 'Entrega o lead qualificado a um closer (rodízio ou fixo)'],
     pontos: ['Pontuar lead', 'estrela', 'c-acao', 'Soma pontos para saber quem está mais pronto para comprar'],
     responder_comentario: ['Responder comentário', 'instagram', 'c-msg', 'Resposta pública no post do Instagram'],
+    email: ['Enviar e-mail', 'email', 'c-msg', 'Manda um e-mail pronto (feito em E-mail marketing)'],
     activecampaign: ['Enviar ao ActiveCampaign', 'email', 'c-acao', 'Cria ou atualiza o contato lá e aplica tags'],
     webhook: ['Enviar webhook', 'webhook', 'c-acao', 'Avisa outro sistema (n8n, Make, Zapier)'],
     ir: ['Ir para passo', 'seta', 'c-cond', 'Pula para outro passo do fluxo'],
@@ -96,6 +100,15 @@
     { id: 'comprador', nome: 'Boas-vindas ao comprador', desc: 'Mensagem quando a compra é aprovada', a: { nome: 'Boas-vindas ao comprador', gatilho: { tipo: 'evento', evento: 'compra_aprovada' }, uma_vez: 'NAO', passos: [
       { tipo: 'mensagem', texto: 'Parabéns pela compra, {primeiro_nome}! Seja muito bem-vindo(a). Seu acesso chega no seu e-mail. Qualquer dúvida, fale com a gente por aqui.' },
       { tipo: 'tag', acao: 'add', tag: 'Cliente' }] } },
+    { id: 'emailwhats', nome: 'E-mail e WhatsApp juntos', desc: 'Manda um e-mail; quem não abrir em 2 dias recebe no WhatsApp', a: { nome: 'E-mail com reforço no WhatsApp', gatilho: { tipo: 'webhook', origem: '' }, uma_vez: 'SIM', passos: [
+      { id: 'w1', tipo: 'email', email_id: '' },
+      { id: 'w2', tipo: 'esperar', valor: 2, unidade: 'dias' },
+      { id: 'w3', tipo: 'condicao', se: 'email', op: 'nao_abriu', valor: '', sim: 'w4', nao: 'fim' },
+      { id: 'w4', tipo: 'mensagem', texto: 'Oi {primeiro_nome}! Te mandei um e-mail com os detalhes. Quer que eu te mande por aqui mesmo?' }] } },
+    { id: 'visita', nome: 'Visitou a página de preços', desc: 'Quem clicou num e-mail e voltou à página de preços ganha pontos e um contato', a: { nome: 'Visitou a página de preços', gatilho: { tipo: 'visitou', url: 'preco' }, uma_vez: 'SIM', passos: [
+      { tipo: 'pontos', acao: 'somar', valor: 30 },
+      { tipo: 'tag', acao: 'add', tag: 'Viu preços' },
+      { tipo: 'tarefa', titulo: 'Ligar para {nome} (viu a página de preços)', prazo_horas: 2 }] } },
     { id: 'comentario', nome: 'Comentou no post, recebe no Direct', desc: 'Instagram: quem comenta a palavra recebe o link no privado', a: { nome: 'Comentário no Instagram para Direct', gatilho: { tipo: 'comentario', palavras: 'eu quero, quero, link', modo: 'contem' }, passos: [
       { tipo: 'responder_comentario', texto: '{Te chamei no Direct!|Olha seu Direct!|Enviei no seu Direct}' },
       { tipo: 'mensagem', texto: 'Oi! Vi seu comentário. Aqui está o que você pediu: https://seusite.com.br' },
@@ -121,7 +134,14 @@
     if ((g.tipo === 'webhook' || g.tipo === 'novo_contato') && g.origem) return n + ' (origem: ' + g.origem + ')';
     if (g.tipo === 'comentario') return n + ': ' + (g.palavras ? '"' + g.palavras + '"' : 'qualquer comentário');
     if (g.tipo === 'evento') return n + ': ' + (EVENTOS[g.evento] || 'escolha o evento') + (g.produto ? ' (' + g.produto + ')' : '');
+    if (g.tipo === 'email_aberto' || g.tipo === 'email_clicou') return n + ': ' + (g.email_id ? nomeEmail(g.email_id) : 'qualquer e-mail') + (g.link ? ' (link com "' + g.link + '")' : '');
+    if (g.tipo === 'visitou') return n + (g.url ? ': página com "' + g.url + '"' : ': qualquer página');
     return n;
+  }
+
+  function nomeEmail(id) { var e = (S.emails || []).filter(function (x) { return x.id === id; })[0]; return e ? e.nome : '(e-mail removido)'; }
+  function opcoesEmails(atual, vazio) {
+    return (vazio ? '<option value="">' + vazio + '</option>' : '') + (S.emails || []).map(function (e) { return '<option value="' + e.id + '"' + (atual === e.id ? ' selected' : '') + '>' + esc(e.nome) + (e.tipo === 'automacao' ? '' : ' (campanha)') + '</option>'; }).join('');
   }
 
   function renderLista(el) {
@@ -195,6 +215,7 @@
       case 'pontos': return p.acao === 'zerar' ? 'Zerar pontuação' : (Number(p.valor) >= 0 ? '+' : '') + (p.valor || 0) + ' pontos';
       case 'responder_comentario': return p.texto || '';
       case 'activecampaign': return 'Tags: ' + (p.tags || 'nenhuma');
+      case 'email': return p.email_id ? nomeEmail(p.email_id) : 'Escolha o e-mail';
       case 'pergunta': return (p.texto || '') + '\n> salva em: ' + (p.campo || '(não salva)') + (p.validar && p.validar !== 'texto' ? ' · valida ' + p.validar : '');
       case 'menu': return p.texto || '';
       case 'esperar': return p.valor + ' ' + p.unidade;
@@ -215,6 +236,7 @@
   function descCond(p) {
     if (p.se === 'tag') return 'Se ' + (p.op === 'nao_tem' ? 'NÃO tem' : 'tem') + ' a tag "' + (p.valor || '') + '"';
     if (p.se === 'etapa') { var e = C.etapa(p.valor); return 'Se ' + (p.op === 'nao_tem' ? 'NÃO está' : 'está') + ' na etapa "' + (e ? e.nome : '?') + '"'; }
+    if (p.se === 'email') return 'Se ' + ({ abriu: 'abriu', nao_abriu: 'NÃO abriu', clicou: 'clicou em', nao_clicou: 'NÃO clicou em' }[p.op] || 'abriu') + ' ' + (p.valor ? '"' + nomeEmail(p.valor) + '"' : 'algum e-mail');
     if (p.se === 'horario') return 'Se agora está entre ' + (p.inicio || '08:00') + ' e ' + (p.fim || '18:00') + ' (dias ' + (p.dias || '1-5') + ')';
     return 'Se o campo "' + (p.campo || '?') + '" ' + ({ igual: 'é igual a', diferente: 'é diferente de', contem: 'contém', vazio: 'está vazio', preenchido: 'está preenchido', maior: 'é maior que', menor: 'é menor que' }[p.op] || p.op) + (['vazio', 'preenchido'].indexOf(p.op) >= 0 ? '' : ' "' + (p.valor || '') + '"');
   }
@@ -259,6 +281,8 @@
         if (!e.passos.length) throw new Error('Adicione pelo menos um passo.');
         if (e.gatilho.tipo === 'etapa' && !e.gatilho.etapa_id) throw new Error('Escolha a etapa do gatilho.');
         if (e.gatilho.tipo === 'tag' && !e.gatilho.tag) throw new Error('Escolha a tag do gatilho.');
+        var semEmail = e.passos.findIndex(function (p) { return p.tipo === 'email' && !p.email_id; });
+        if (semEmail >= 0) throw new Error('Escolha o e-mail no passo ' + (semEmail + 1) + '.');
         return C.api('automacao.salvar', { automacao: e }).then(function (r) {
           var i = S.automacoes.findIndex(function (x) { return x.id === r.id; });
           if (i >= 0) S.automacoes[i] = r; else S.automacoes.push(r);
@@ -304,6 +328,9 @@
         (S.config.instagram ? '' : '<div class="aviso">' + ic('alerta') + '<div>Conecte o Instagram em Integrações para este gatilho funcionar.</div></div>');
       else if (tipo === 'evento') x.innerHTML = '<div class="grade2"><div class="campo"><label>Evento</label><select class="inp" id="g-ev">' + Object.keys(EVENTOS).map(function (k) { return '<option value="' + k + '"' + (g.evento === k ? ' selected' : '') + '>' + EVENTOS[k] + '</option>'; }).join('') + '</select></div>' +
         '<div class="campo"><label>Só para o produto (opcional)</label><input class="inp" id="g-prod" value="' + esc(g.produto || '') + '" placeholder="Parte do nome do produto"></div></div><p class="small muted">Os eventos chegam pelas integrações da Hotmart e da Kiwify.</p>';
+      else if (tipo === 'email_aberto' || tipo === 'email_clicou') x.innerHTML = '<div class="campo"><label>Qual e-mail</label><select class="inp" id="g-email">' + opcoesEmails(g.email_id, 'Qualquer e-mail') + '</select></div>' +
+        (tipo === 'email_clicou' ? '<div class="campo"><label>Só links que contêm (opcional)</label><input class="inp" id="g-link" value="' + esc(g.link || '') + '" placeholder="agendar"></div>' : '');
+      else if (tipo === 'visitou') x.innerHTML = '<div class="campo"><label>Página com este trecho no endereço (opcional)</label><input class="inp" id="g-url" value="' + esc(g.url || '') + '" placeholder="/precos"><span class="ajuda">Precisa do script de rastreio no site (Integrações > Rastreio do site). Só contatos que já clicaram num e-mail são reconhecidos.</span></div>';
       else if (tipo === 'primeira_mensagem') x.innerHTML = '<div class="aviso info">' + ic('info') + '<div>Dispara quando um número que nunca falou com você manda mensagem. Ideal para menu de boas-vindas.</div></div>';
       else x.innerHTML = '';
     };
@@ -320,6 +347,8 @@
       if (tipo === 'webhook' || tipo === 'novo_contato') n.origem = v('g-origem');
       if (tipo === 'comentario') { n.palavras = v('g-pal'); n.modo = 'contem'; n.post = v('g-post'); }
       if (tipo === 'evento') { n.evento = v('g-ev'); n.produto = v('g-prod'); }
+      if (tipo === 'email_aberto' || tipo === 'email_clicou') { n.email_id = v('g-email'); n.link = v('g-link'); }
+      if (tipo === 'visitou') n.url = v('g-url');
       editando.gatilho = n;
       el.fechar(); C.render();
     };
@@ -388,6 +417,7 @@
         '<div class="campo"><label>Resumo para o closer</label><textarea class="inp" id="p-nota" rows="2">' + esc(p.nota || '') + '</textarea><span class="ajuda">Pode usar {nome}, {interesse} e outros campos.</span></div>'; break;
       case 'pontos': corpo = '<div class="grade2"><div class="campo"><label>Ação</label>' + sel('p-acao', [['somar', 'Somar (use número negativo para tirar)'], ['zerar', 'Zerar pontuação']], p.acao) + '</div><div class="campo"><label>Pontos</label><input class="inp" type="number" id="p-valor" value="' + esc(p.valor || 10) + '"></div></div><p class="small muted">Use uma Condição com o campo Pontuação para separar quem está pronto para comprar.</p>'; break;
       case 'responder_comentario': corpo = campoTexto(p, 'Resposta pública no comentário') + '<p class="small muted">Só funciona em automações com o gatilho Comentou no Instagram. Varie o texto com {opção A|opção B} para não parecer repetido.</p>'; break;
+      case 'email': corpo = (S.emails || []).length ? '<div class="campo"><label>E-mail</label><select class="inp" id="p-email">' + opcoesEmails(p.email_id, 'Escolha') + '</select><span class="ajuda">Crie e edite os e-mails em E-mail marketing > E-mails de automação.</span></div>' : '<div class="aviso">' + ic('info') + '<div>Crie primeiro um e-mail em <b>E-mail marketing > E-mails de automação</b>.</div></div>'; break;
       case 'activecampaign': corpo = '<div class="campo"><label>Tags para aplicar no ActiveCampaign</label><input class="inp" id="p-tags" value="' + esc(p.tags || '') + '" placeholder="Lead WhatsApp, Qualificado"><span class="ajuda">O contato precisa ter e-mail. A lista padrão é a escolhida em Integrações > ActiveCampaign.</span></div>'; break;
       case 'pergunta':
         corpo = campoTexto(p, 'Pergunta') + '<div class="grade2"><div class="campo"><label>Salvar a resposta em</label>' + sel('p-campo', camposDestino(), p.campo) + '</div>' +
@@ -400,7 +430,7 @@
         break;
       case 'esperar': corpo = '<div class="grade2"><div class="campo"><label>Quanto tempo</label><input class="inp" type="number" min="1" id="p-valor" value="' + esc(p.valor || 1) + '"></div><div class="campo"><label>Unidade</label>' + sel('p-unid', [['minutos', 'Minutos'], ['horas', 'Horas'], ['dias', 'Dias']], p.unidade) + '</div></div><p class="small muted">A espera é conferida a cada minuto pelo servidor.</p>'; break;
       case 'condicao':
-        corpo = '<div class="grade2"><div class="campo"><label>Verificar</label>' + sel('p-se', [['tag', 'Tag do contato'], ['campo', 'Campo do contato'], ['etapa', 'Etapa do funil'], ['horario', 'Horário de agora']], p.se) + '</div><div id="p-condx"></div></div><div id="p-condy"></div>' +
+        corpo = '<div class="grade2"><div class="campo"><label>Verificar</label>' + sel('p-se', [['tag', 'Tag do contato'], ['campo', 'Campo do contato'], ['etapa', 'Etapa do funil'], ['email', 'Abriu ou clicou e-mail'], ['horario', 'Horário de agora']], p.se) + '</div><div id="p-condx"></div></div><div id="p-condy"></div>' +
           '<div class="grade2"><div class="campo"><label>Se SIM, ir para</label><select class="inp" id="p-sim">' + opcoesPassos(p.sim, true, p.id) + '</select></div><div class="campo"><label>Se NÃO, ir para</label><select class="inp" id="p-nao">' + opcoesPassos(p.nao, true, p.id) + '</select></div></div>';
         break;
       case 'tag': corpo = '<div class="grade2"><div class="campo"><label>Ação</label>' + sel('p-acao', [['add', 'Adicionar tag'], ['remover', 'Remover tag']], p.acao) + '</div><div class="campo"><label>Tag</label><input class="inp" id="p-tag" list="p-tags" value="' + esc(p.tag || '') + '"><datalist id="p-tags">' + C.todasTags().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist></div></div>'; break;
@@ -457,6 +487,7 @@
       var x = el.querySelector('#p-condx'), y = el.querySelector('#p-condy');
       if (se.value === 'tag') { x.innerHTML = '<div class="campo"><label>Condição</label>' + sel('p-op', [['tem', 'Tem a tag'], ['nao_tem', 'Não tem a tag']], p.op) + '</div>'; y.innerHTML = '<div class="campo"><label>Tag</label><input class="inp" id="p-valor" value="' + esc(p.valor || '') + '"></div>'; }
       else if (se.value === 'etapa') { x.innerHTML = '<div class="campo"><label>Condição</label>' + sel('p-op', [['tem', 'Está na etapa'], ['nao_tem', 'Não está na etapa']], p.op) + '</div>'; y.innerHTML = '<div class="campo"><label>Etapa</label>' + sel('p-valor', etapasOps, p.valor) + '</div>'; }
+      else if (se.value === 'email') { x.innerHTML = '<div class="campo"><label>Condição</label>' + sel('p-op', [['abriu', 'Abriu'], ['nao_abriu', 'Não abriu'], ['clicou', 'Clicou'], ['nao_clicou', 'Não clicou']], p.op) + '</div>'; y.innerHTML = '<div class="campo"><label>E-mail</label><select class="inp" id="p-valor">' + opcoesEmails(p.valor, 'Qualquer e-mail') + '</select></div>'; }
       else if (se.value === 'horario') { x.innerHTML = ''; y.innerHTML = '<div class="grade3"><div class="campo"><label>Das</label><input class="inp" type="time" id="p-ini" value="' + esc(p.inicio || '08:00') + '"></div><div class="campo"><label>Até</label><input class="inp" type="time" id="p-fim" value="' + esc(p.fim || '18:00') + '"></div><div class="campo"><label>Dias (0=dom ... 6=sáb)</label><input class="inp" id="p-dias" value="' + esc(p.dias || '1,2,3,4,5') + '"></div></div><p class="small muted" style="margin-top:0">SIM = dentro do horário.</p>'; }
       else { x.innerHTML = '<div class="campo"><label>Campo</label>' + sel('p-campo', camposDestino().slice(1).concat([['origem', 'Origem'], ['status', 'Status'], ['pontos', 'Pontuação']]), p.campo) + '</div>'; y.innerHTML = '<div class="grade2"><div class="campo"><label>Comparação</label>' + sel('p-op', [['igual', 'É igual a'], ['diferente', 'É diferente de'], ['contem', 'Contém'], ['vazio', 'Está vazio'], ['preenchido', 'Está preenchido'], ['maior', 'Maior que'], ['menor', 'Menor que']], p.op) + '</div><div class="campo"><label>Valor</label><input class="inp" id="p-valor" value="' + esc(p.valor || '') + '"></div></div>'; }
     };
@@ -470,7 +501,8 @@
       set('acao', 'p-acao'); set('tag', 'p-tag'); set('etapa_id', 'p-etapa'); set('modo', 'p-modo'); set('usuario_id', 'p-usuario');
       set('titulo', 'p-titulo'); set('prazo_horas', 'p-prazo', true); set('horas', 'p-horas', true); set('url', 'p-url'); set('passo', 'p-passo');
       set('inicio', 'p-ini'); set('fim', 'p-fim'); set('dias', 'p-dias'); set('expira_horas', 'p-exp', true); set('sem_resposta', 'p-semresp');
-      set('meta_modelo', 'p-mmod'); set('meta_variaveis', 'p-mvars'); set('meta_categoria', 'p-mcat'); set('flow_id', 'p-flow'); set('botao', 'p-botao'); set('tela', 'p-tela'); set('nota', 'p-nota'); set('tags', 'p-tags');
+      set('meta_modelo', 'p-mmod'); set('meta_variaveis', 'p-mvars'); set('meta_categoria', 'p-mcat'); set('flow_id', 'p-flow'); set('botao', 'p-botao'); set('tela', 'p-tela'); set('nota', 'p-nota'); set('tags', 'p-tags'); set('email_id', 'p-email');
+      if (p.tipo === 'email' && !p.email_id) { C.toast('Escolha o e-mail', 'erro'); return; }
       if (p.tipo === 'formulario') { p.perguntas = qs.filter(function (q) { return q.texto.trim(); }); if (!p.perguntas.length && !p.flow_id) { C.toast('Adicione pelo menos uma pergunta ou o ID do Flow', 'erro'); return; } }
       if (p.tipo === 'pontos') p.valor = Number(p.valor) || 0;
       if (p.midia_url) p.midia_url = C.driveDireto ? C.driveDireto(p.midia_url) : p.midia_url;

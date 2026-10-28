@@ -50,7 +50,7 @@ Salve.
 
 1. No menu de cima do editor, escolha a função **instalar** e clique em **Executar**.
 2. O Google pede autorização: **Revisar permissões > escolha sua conta > Avançado > Acessar (não seguro) > Permitir**.
-   Esse aviso aparece em todo script pessoal. O script acessa esta planilha, cria as planilhas do arquivo mensal numa pasta do seu Drive, envia mensagens para os endereços que você configurar e cria um gatilho que roda a cada minuto.
+   Esse aviso aparece em todo script pessoal. O script acessa esta planilha, cria as planilhas do arquivo mensal numa pasta do seu Drive, envia os e-mails de marketing pelo seu Gmail, envia mensagens para os endereços que você configurar e cria um gatilho que roda a cada minuto.
 3. Espere aparecer "Pronto!" no registro de execução. As abas da planilha serão criadas.
 
 ## Passo 4. Publicar o servidor
@@ -137,6 +137,10 @@ Em **Equipe e acessos** (só o administrador vê), crie uma conta para cada pess
 
 Todo mês os dados fechados do mês anterior vão para uma planilha própria no seu Google Drive, e a planilha principal fica leve. Detalhes: `docs/ARQUIVO_MENSAL.md`.
 
+## E-mail marketing
+
+Campanhas e e-mails de automação saem pelo Gmail da sua conta, sem custo. Configure o remetente e o rodapé em Integrações > Envio de e-mails. Guia completo: `docs/EMAIL_MARKETING.md`.
+
 ---
 
 ## Atualizar para uma versão nova
@@ -144,6 +148,8 @@ Todo mês os dados fechados do mês anterior vão para uma planilha própria no 
 **Servidor:** Apps Script > cole o `Codigo.gs` novo por cima (mantenha o seu `ADMIN_INICIAL`) > **Implantar > Gerenciar implantações > lápis > Versão: Nova versão > Implantar**. A URL `/exec` continua a mesma. Rode **instalar** de novo se a versão pedir (ele só cria o que falta, não apaga dados).
 
 **Site:** no GitHub, envie os arquivos novos da pasta `site` do mesmo jeito do Passo 6. Se você editou o `config.js`, não envie o `config.js` novo por cima.
+
+**Para a versão 1.2 (e-mail marketing):** cole o `Codigo.gs` novo, rode **instalar** de novo e aceite a nova permissão do Google ("enviar e-mail como você"). Depois publique a nova versão e envie os arquivos novos do site (inclui `r.html` e `rastreio.js`).
 
 **Da versão 1.0 para a 1.1:** depois de colar o `Codigo.gs` novo, rode **instalar** de novo. Ele cria as colunas e a aba novas (Arquivos) e pede uma permissão a mais do Google, para criar as planilhas do arquivo mensal no seu Drive. Aceite e publique a nova versão. Se você já tem meses de uso, em Ajustes > Sistema e arquivo clique em **Arquivar meses anteriores agora** fora do horário de atendimento.
 

@@ -34,6 +34,7 @@ const P = {
   },
   urlApp: () => 'https://script.google.com/macros/s/TESTE/exec',
   substituir: (n, objs) => { db[n] = objs.slice(); },
+  email: { gmail: (m) => emailsSaidos.push(m), cotaGmail: () => 100 },
   arquivo: {
     criar: (nome) => { const id = 'ARQ' + (++seq); arq[id] = { nome, t: {} }; return { id, url: 'https://docs.google.com/' + id }; },
     anexar: (id, aba, cab, objs) => { const a = arq[id].t[aba] = arq[id].t[aba] || []; objs.forEach((o) => { if (!a.some((x) => x.id === o.id)) a.push(Object.assign({}, o)); }); },
@@ -42,6 +43,7 @@ const P = {
   }
 };
 const arq = {};
+const emailsSaidos = [];
 
 const L = PrumoLogica(P);
 L.semear({ nome: 'Admin', email: 'admin@teste.com', senha: 'senha-forte-1' });
@@ -130,5 +132,6 @@ lanca(() => apiA('contato.ver', { id: rui.id }), 'atendente não abre contato de
 ok(JSON.stringify(api('config.ver')).indexOf('"k"') < 0 && api('config.ver').EVOLUTION_APIKEY.indexOf('••') === 0, 'segredos mascarados');
 
 require('./testar-novos.js')({ L, P, t, cfg, cache, enviados, api, ok, lanca, arq, iso });
+require('./testar-email.js')({ L, P, t, cfg, enviados, api, ok, lanca, emailsSaidos });
 console.log((total - falhas) + '/' + total + ' testes passaram');
 process.exit(falhas ? 1 : 0);

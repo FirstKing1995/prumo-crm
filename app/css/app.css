@@ -463,3 +463,22 @@ code.bloco { white-space: pre; }
 .janela.gratis { background: var(--acc-soft); color: #854D0E; }
 .janela.fechada { background: var(--vermelho-soft); color: #991B1B; }
 .janela.fechada .btn { margin-left: auto; }
+
+/* ---------- e-mail marketing ---------- */
+.em-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.em-dir { position: sticky; top: 0; }
+.em-dir iframe { width: 100%; height: 560px; border: 1px solid var(--borda); border-radius: var(--raio-sm); background: #F3F4F6; }
+.em-previa-cab { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 6px; }
+.em-bloco { border: 1px solid var(--borda); border-radius: var(--raio-sm); padding: 8px 10px 10px; margin-bottom: 8px; background: var(--card); }
+.em-bloco-cab { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 6px; }
+.em-bloco-cab .i { width: 15px; height: 15px; color: var(--txt-2); }
+.em-nums { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--txt-2); margin-top: 4px; }
+.em-nums b { color: var(--txt); }
+.em-botoes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.dado.vencedor { background: var(--verde-soft); border-radius: var(--raio-sm); padding: 6px 8px; }
+@media (max-width: 900px) {
+  .em-editor { grid-template-columns: 1fr; }
+  .em-dir { position: static; }
+  .em-dir iframe { height: 420px; }
+  .em-botoes { justify-content: flex-start; }
+}

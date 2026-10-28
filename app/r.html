@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Abrindo...</title>
+<style>body{margin:0;font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;color:#475569}a{color:#1F6FEB}</style>
+</head>
+<body>
+<p id="m">Abrindo o link...</p>
+<script>
+/* Link rastreado dos e-mails: registra o clique no servidor e segue para o destino. */
+(function () {
+  var q = new URLSearchParams(location.search);
+  var destino = q.get('u') || '', api = q.get('a') || '';
+  if (!/^https?:\/\//i.test(destino)) { document.getElementById('m').textContent = 'Link inválido.'; return; }
+  var seguir = function (pcid) {
+    var url = destino;
+    if (pcid) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'pcid=' + encodeURIComponent(pcid);
+    location.replace(url);
+  };
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(api)) { seguir(''); return; }
+  var feito = false;
+  var fim = function (pcid) { if (feito) return; feito = true; seguir(pcid); };
+  setTimeout(function () { fim(''); }, 2500); // nunca segura a pessoa mais que 2,5 s
+  fetch(api, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'publico.clique', f: q.get('f'), s: q.get('s'), u: destino }) })
+    .then(function (r) { return r.json(); }).then(function (r) { fim(r && r.data && r.data.pcid); }).catch(function () { fim(''); });
+})();
+</script>
+</body>
+</html>
