@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Entrando no grupo...</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: #F4F6F9; color: #0F172A; padding: 16px; box-sizing: border-box; }
+    .c { background: #fff; border-radius: 16px; padding: 32px 24px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 8px 30px rgba(15,23,42,.08); }
+    .spin { width: 34px; height: 34px; border: 3px solid #1FAF53; border-right-color: transparent; border-radius: 50%; animation: g .8s linear infinite; margin: 0 auto 16px; }
+    @keyframes g { to { transform: rotate(360deg); } }
+    a.b { display: inline-block; margin-top: 16px; background: #1FAF53; color: #fff; padding: 14px 22px; border-radius: 10px; text-decoration: none; font-weight: 700; }
+    p { color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="c" id="c"><div class="spin"></div><h1 style="font-size:18px;margin:0">Procurando um grupo com vaga...</h1></div>
+  <script src="js/logica.js"></script>
+  <script>
+    (function () {
+      var q = new URLSearchParams(location.search);
+      var slug = q.get('g') || '', sid = q.get('s') || '';
+      var box = document.getElementById('c');
+      var fim = function (r) {
+        if (r && r.link && /^https:\/\/chat\.whatsapp\.com\//.test(r.link)) {
+          box.innerHTML = '<h1 style="font-size:18px;margin:0">Grupo encontrado</h1><p>Se o WhatsApp não abrir sozinho, toque no botão.</p><a class="b" id="ir">Entrar no grupo</a>';
+          document.getElementById('ir').href = r.link;
+          location.replace(r.link);
+        } else {
+          box.innerHTML = '<h1 style="font-size:18px;margin:0">Grupos lotados</h1><p>Todos os grupos estão cheios agora. Tente de novo mais tarde.</p>';
+        }
+      };
+      if (!/^[\w-]+$/.test(slug)) return fim(null);
+      if (q.get('demo') === '1') {
+        var s = document.createElement('script'); s.src = 'js/demo.js';
+        s.onload = function () { window.PrumoDemo.call({ action: 'publico.grupo', slug: slug }).then(function (r) { fim(r.data); }); };
+        document.body.appendChild(s);
+        return;
+      }
+      if (!/^[\w-]+$/.test(sid)) return fim(null);
+      fetch('https://script.google.com/macros/s/' + sid + '/exec', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'publico.grupo', slug: slug }) })
+        .then(function (r) { return r.json(); }).then(function (r) { fim(r.data); }).catch(function () { fim(null); });
+    })();
+  </script>
+</body>
+</html>
