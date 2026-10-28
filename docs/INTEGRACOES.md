@@ -1,4 +1,4 @@
-# Integrações de captação de leads
+# Integrações
 
 Toda integração usa a **URL de webhook** que aparece em **Integrações > Formulários e sites**. Ela tem este formato:
 
@@ -31,19 +31,73 @@ No fim do fluxo, adicione o bloco **HTTP request**:
 - Método: POST · URL: a URL de webhook
 - Corpo (JSON): `{"nome": "{{Nome}}", "telefone": "{{Telefone}}", "email": "{{Email}}"}`
 
-## Hotmart, Kiwify, Eduzz, Monetizze
+## Hotmart e Kiwify (vendas)
 
-Em **Webhooks / Postback**, cadastre a URL com, por exemplo, `&origem=Hotmart&tags=Comprador`. O comprador entra como contato com as tags. Para mover para "Ganho", acrescente `&etapa=ID_DA_ETAPA_GANHO`.
+Use a URL de **Integrações > Hotmart** (ou Kiwify). Ela tem uma chave própria, `src=vendas`, diferente da URL de formulários: como a URL de formulários fica visível no código do seu site, eventos de compra que chegam por ela são ignorados. Assim ninguém consegue registrar uma venda falsa.
 
-## RD Station Marketing, ActiveCampaign, Mailchimp
+- **Hotmart:** Ferramentas > Webhook (API e notificações) > Cadastrar webhook. Versão 2.0. Marque compra aprovada, compra completa, abandono de carrinho, boleto impresso, reembolso, chargeback e cancelamento.
+- **Kiwify:** Apps > Webhooks > Criar webhook. Marque compra aprovada, carrinho abandonado, boleto gerado, Pix gerado, compra recusada, reembolso, chargeback e assinatura cancelada.
 
-Use a ação de **webhook** dentro das automações dessas ferramentas apontando para a URL.
+O que acontece em cada evento:
 
-## Facebook e Instagram Lead Ads
+| Evento | No sistema |
+|---|---|
+| Compra aprovada | Tag "Plataforma: Comprou", contato vira cliente, negócio ganho com o valor da venda, sai das automações de recuperação |
+| Carrinho abandonado | Tag "Plataforma: Carrinho abandonado" |
+| Boleto ou Pix gerado | Tag correspondente |
+| Reembolso, chargeback, cancelamento, recusa | Tag correspondente |
 
-Use Make ou Zapier (planos gratuitos atendem volumes pequenos):
-1. Gatilho: **Facebook Lead Ads > New Lead**.
-2. Ação: **Webhooks / HTTP > POST** para a URL, com os campos `nome`, `email`, `telefone`.
+Todos os eventos podem iniciar automações pelo gatilho **Evento de venda**. Em Automações > Nova, use os modelos **Recuperar carrinho abandonado**, **Lembrete de boleto e Pix** e **Boas-vindas ao comprador**.
+
+Eduzz, Monetizze e outras: use a URL de formulários com `&origem=NomeDaPlataforma&tags=Comprador`. O comprador entra como contato com as tags.
+
+## ActiveCampaign
+
+**De lá para cá:** na automação do ActiveCampaign, adicione a ação **Webhook** com a URL de formulários e `&fonte=activecampaign&origem=ActiveCampaign`. O ActiveCampaign manda os dados como formulário (`contact[email]`, `contact[first_name]`...) e o sistema entende esse formato.
+
+**Daqui para lá:** em Integrações > ActiveCampaign, cole a URL da API e a chave (Configurações > Desenvolvedor no ActiveCampaign), teste e escolha a lista padrão. Nas automações, o passo **Enviar ao ActiveCampaign** cria ou atualiza o contato (precisa de e-mail), coloca na lista e aplica as tags que você escolher.
+
+## RD Station Marketing e Mailchimp
+
+Use a ação de **webhook** dentro das automações dessas ferramentas apontando para a URL de formulários.
+
+## Anúncios de cadastro: Facebook, Instagram e TikTok
+
+O sistema entende o formato de "pares" desses anúncios (`field_data: [{name, values}]` da Meta e `answers: [{question, answer}]` do TikTok).
+
+- **Facebook e Instagram (Lead Ads):** Make ou Zapier, gatilho **Facebook Lead Ads > New Lead**, ação **HTTP > POST** para a URL de formulários com `&fonte=facebook&origem=Anúncio%20Facebook`.
+- **TikTok (formulário instantâneo):** no TikTok Ads Manager, na área de Leads, use a integração com CRM por webhook se a sua conta tiver essa opção; senão, Make ou Zapier com o gatilho de novo lead do TikTok. URL de formulários com `&fonte=tiktok&origem=Anúncio%20TikTok`.
+
+Dica: crie uma automação com o gatilho **Formulário / webhook** e a origem do anúncio para mandar a primeira mensagem no WhatsApp na hora.
+
+## Instagram Direct e comentários
+
+Configuração em **Integrações > Instagram Direct e comentários** (o tutorial está na própria tela). Depois de ligado:
+
+- O Direct aparece na caixa de Conversas, com o ícone do Instagram. Dá para responder até 24 horas depois da última mensagem da pessoa (regra do Instagram).
+- O gatilho **Comentou no Instagram** inicia uma automação quando alguém comenta uma palavra num post. O passo **Responder comentário** responde em público, e a primeira mensagem do fluxo vai como resposta privada no Direct.
+- Menus dos robôs viram botões de resposta rápida.
+
+## API do sistema
+
+Para programadores, n8n, Make ou Zapier mandarem comandos para o CRM. Ligue em **Integrações > API do sistema** (gera uma chave secreta). Não publique essa URL: com ela é possível mandar mensagens pelo seu WhatsApp.
+
+Toda chamada é um POST com JSON:
+
+| `acao` | Campos |
+|---|---|
+| `contato.salvar` | nome, telefone, email, empresa, cidade, origem, tags, campos |
+| `contato.buscar` | contato_id, telefone ou email |
+| `tag.adicionar` / `tag.remover` | telefone ou email + tags |
+| `mensagem.enviar` | telefone ou email + texto |
+| `automacao.iniciar` | telefone ou email + automacao (nome) ou automacao_id |
+| `negocio.etapa` | telefone ou email + etapa_id |
+
+Exemplo:
+
+```json
+{ "acao": "mensagem.enviar", "telefone": "11999998888", "texto": "Oi {primeiro_nome}, seu pedido saiu!" }
+```
 
 ## Google Forms
 
@@ -80,6 +134,9 @@ Em **Integrações > n8n, Make e Zapier**, cadastre URLs que recebem eventos:
 - `mensagem.recebida`
 - `negocio.ganho`
 - `negocio.perdido`
+- `lead.passado` (SDR passou para o closer)
+- `reuniao.agendada`
+- `compra.compra_aprovada`, `compra.carrinho_abandonado` e os outros eventos de venda
 
 Cada evento chega como POST JSON:
 

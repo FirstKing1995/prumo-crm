@@ -50,7 +50,7 @@ Salve.
 
 1. No menu de cima do editor, escolha a função **instalar** e clique em **Executar**.
 2. O Google pede autorização: **Revisar permissões > escolha sua conta > Avançado > Acessar (não seguro) > Permitir**.
-   Esse aviso aparece em todo script pessoal. O script só acessa esta planilha, envia mensagens para os endereços que você configurar e cria um gatilho que roda a cada minuto.
+   Esse aviso aparece em todo script pessoal. O script acessa esta planilha, cria as planilhas do arquivo mensal numa pasta do seu Drive, envia mensagens para os endereços que você configurar e cria um gatilho que roda a cada minuto.
 3. Espere aparecer "Pronto!" no registro de execução. As abas da planilha serão criadas.
 
 ## Passo 4. Publicar o servidor
@@ -127,7 +127,15 @@ Vá em **Integrações** e escolha uma opção. Cada uma tem tutorial dentro do 
 - **API oficial da Meta**: tutorial dentro do sistema
 - **Modo link**: funciona sem instalar nada, mas sem robôs e sem receber mensagens
 
-Para receber leads do site, formulários e plataformas de venda: `docs/INTEGRACOES.md`.
+Para receber leads do site, formulários, Hotmart, Kiwify, ActiveCampaign, anúncios e Instagram: `docs/INTEGRACOES.md`. Usando a API oficial da Meta, leia também `docs/ECONOMIA_API_OFICIAL.md`.
+
+## Passo 11. Criar as contas da equipe
+
+Em **Equipe e acessos** (só o administrador vê), crie uma conta para cada pessoa: SDRs, closers e gestores. O sistema mostra a mensagem pronta com o endereço, o e-mail e a senha para você enviar. Como a passagem de leads entre SDR e closer funciona: `docs/EQUIPE_COMERCIAL.md`.
+
+## Arquivo mensal
+
+Todo mês os dados fechados do mês anterior vão para uma planilha própria no seu Google Drive, e a planilha principal fica leve. Detalhes: `docs/ARQUIVO_MENSAL.md`.
 
 ---
 
@@ -136,6 +144,8 @@ Para receber leads do site, formulários e plataformas de venda: `docs/INTEGRACO
 **Servidor:** Apps Script > cole o `Codigo.gs` novo por cima (mantenha o seu `ADMIN_INICIAL`) > **Implantar > Gerenciar implantações > lápis > Versão: Nova versão > Implantar**. A URL `/exec` continua a mesma. Rode **instalar** de novo se a versão pedir (ele só cria o que falta, não apaga dados).
 
 **Site:** no GitHub, envie os arquivos novos da pasta `site` do mesmo jeito do Passo 6. Se você editou o `config.js`, não envie o `config.js` novo por cima.
+
+**Da versão 1.0 para a 1.1:** depois de colar o `Codigo.gs` novo, rode **instalar** de novo. Ele cria as colunas e a aba novas (Arquivos) e pede uma permissão a mais do Google, para criar as planilhas do arquivo mensal no seu Drive. Aceite e publique a nova versão. Se você já tem meses de uso, em Ajustes > Sistema e arquivo clique em **Arquivar meses anteriores agora** fora do horário de atendimento.
 
 ## Problemas comuns
 

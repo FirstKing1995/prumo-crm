@@ -14,30 +14,30 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/app.css?v=1.0.0">
+  <link rel="stylesheet" href="css/app.css?v=1.1.0">
 </head>
 <body>
   <div id="app"></div>
   <div id="toasts" class="toasts" aria-live="polite"></div>
   <noscript>Ative o JavaScript para usar o sistema.</noscript>
 
-  <script src="config.js?v=1.0.0"></script>
-  <script src="js/logica.js?v=1.0.0"></script>
+  <script src="config.js?v=1.1.0"></script>
+  <script src="js/logica.js?v=1.1.0"></script>
   <script>
     // O modo demonstração só é carregado quando escolhido (roda a lógica no navegador).
     (function () {
       var api = window.PRUMO.API_URL;
       try { api = api || JSON.parse(localStorage.getItem('prumo_api') || '""'); } catch (e) { }
       if (/[?&]demo=1/.test(location.search)) api = 'demo';
-      if (api === 'demo') document.write('<script src="js/demo.js?v=1.0.0"><\/script>');
+      if (api === 'demo') document.write('<script src="js/demo.js?v=1.1.0"><\/script>');
     })();
   </script>
-  <script src="js/core.js?v=1.0.0"></script>
-  <script src="js/app.js?v=1.0.0"></script>
-  <script src="js/views-crm.js?v=1.0.0"></script>
-  <script src="js/views-conversas.js?v=1.0.0"></script>
-  <script src="js/views-automacoes.js?v=1.0.0"></script>
-  <script src="js/views-marketing.js?v=1.0.0"></script>
-  <script src="js/views-gestao.js?v=1.0.0"></script>
+  <script src="js/core.js?v=1.1.0"></script>
+  <script src="js/app.js?v=1.1.0"></script>
+  <script src="js/views-crm.js?v=1.1.0"></script>
+  <script src="js/views-conversas.js?v=1.1.0"></script>
+  <script src="js/views-automacoes.js?v=1.1.0"></script>
+  <script src="js/views-marketing.js?v=1.1.0"></script>
+  <script src="js/views-gestao.js?v=1.1.0"></script>
 </body>
 </html>

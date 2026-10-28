@@ -32,8 +32,16 @@ const P = {
     enviados.push({ url, body: o.body ? JSON.parse(o.body) : null });
     return { code: 201, text: JSON.stringify({ key: { id: 'OUT' + enviados.length } }) };
   },
-  urlApp: () => 'https://script.google.com/macros/s/TESTE/exec'
+  urlApp: () => 'https://script.google.com/macros/s/TESTE/exec',
+  substituir: (n, objs) => { db[n] = objs.slice(); },
+  arquivo: {
+    criar: (nome) => { const id = 'ARQ' + (++seq); arq[id] = { nome, t: {} }; return { id, url: 'https://docs.google.com/' + id }; },
+    anexar: (id, aba, cab, objs) => { const a = arq[id].t[aba] = arq[id].t[aba] || []; objs.forEach((o) => { if (!a.some((x) => x.id === o.id)) a.push(Object.assign({}, o)); }); },
+    ler: (id, aba) => (arq[id].t[aba] || []).slice(),
+    filtrar: (id, aba, c, v) => (arq[id].t[aba] || []).filter((o) => o[c] === v)
+  }
 };
+const arq = {};
 
 const L = PrumoLogica(P);
 L.semear({ nome: 'Admin', email: 'admin@teste.com', senha: 'senha-forte-1' });
@@ -121,5 +129,6 @@ api('contato.massa', { ids: [rui.id], acao: 'atribuir', valor: 'U1' });
 lanca(() => apiA('contato.ver', { id: rui.id }), 'atendente não abre contato de outro');
 ok(JSON.stringify(api('config.ver')).indexOf('"k"') < 0 && api('config.ver').EVOLUTION_APIKEY.indexOf('••') === 0, 'segredos mascarados');
 
+require('./testar-novos.js')({ L, P, t, cfg, cache, enviados, api, ok, lanca, arq, iso });
 console.log((total - falhas) + '/' + total + ' testes passaram');
 process.exit(falhas ? 1 : 0);

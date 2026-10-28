@@ -8,15 +8,17 @@ Sistema white label: cada empresa troca nome, logo e cores pelo próprio sistema
 
 | Área | Recursos |
 |---|---|
-| Conversas | Caixa de entrada do WhatsApp para a equipe, respostas rápidas com `/atalho`, mídia por link, responsável por conversa, pausa do robô quando um humano responde |
+| Equipe | Contas por papel (administrador, gestor, SDR, closer) criadas pelo administrador, metas do mês, passagem do lead do SDR para o closer com reunião e lembrete automático, prazo de resposta |
+| Conversas | Caixa de entrada do WhatsApp e do Instagram Direct para a equipe, janela de 24h da API oficial, respostas rápidas com `/atalho`, mídia por link, responsável por conversa, pausa do robô quando um humano responde |
 | Contatos | Tags, campos personalizados, origem, filtros, ações em massa, importação CSV com detecção de colunas, exportação, ficha com histórico |
 | Negócios | Vários funis, kanban com arrastar e soltar, ganho/perdido com motivo, negócios parados |
 | Tarefas | Prazos, atrasadas, tarefas criadas pelos robôs |
-| Automações | Gatilhos (primeira mensagem, palavra-chave, novo contato, webhook, tag, etapa, manual) e 15 tipos de passo: mensagem, pergunta com validação, menu numerado, espera, condição, tag, funil, rodízio, campo, status, tarefa, passar para humano, webhook, ir para, encerrar. 6 modelos prontos |
+| Automações | Gatilhos (primeira mensagem, palavra-chave, novo contato, webhook, tag, etapa, comentário no Instagram, evento de venda, manual) e 20 tipos de passo, incluindo menu com botões, formulário (WhatsApp Flows na API oficial), pontuação de lead, passar para closer, responder comentário e enviar ao ActiveCampaign. 11 modelos prontos |
 | Disparos | Público por tags/etapas/status/origem/datas, spintax `{Oi\|Olá}`, mídia, agendamento, velocidade anti-bloqueio, horário comercial, descadastro automático (SAIR), envio assistido sem API, modelos da Meta |
 | Grupos | Importação dos grupos do WhatsApp, disparo para grupos, link inteligente que troca de grupo quando lota |
-| Relatórios | Contatos por origem, mensagens por dia, tempo de resposta, conversão, motivos de perda, equipe, disparos e automações |
-| Integrações | Evolution API, WAHA, API oficial da Meta, modo link; webhook de captação universal (Elementor, Typebot, Hotmart, Kiwify, RD, Google Forms, Lead Ads via Make/Zapier); formulário pronto; webhooks de saída (n8n, Make, Zapier) |
+| Relatórios | Contatos por origem, mensagens por dia, tempo de resposta, conversão, motivos de perda, SDRs e closers com metas, custo estimado da API oficial, disparos e automações. Inclui meses arquivados |
+| Arquivo mensal | Todo mês os dados fechados vão para uma planilha própria no Drive do cliente ("Nome - Arquivo AAAA-MM"), consultável pelo sistema |
+| Integrações | Evolution API, WAHA, API oficial da Meta (com economia de custo), modo link, Instagram; Hotmart e Kiwify com chave própria; ActiveCampaign nos dois sentidos; Lead Ads do Facebook, Instagram e TikTok; webhook de captação universal; formulário pronto; webhooks de saída; API do sistema com chave secreta |
 | Ajustes | Marca e cores com prévia, funis e etapas, campos e listas, respostas rápidas, regras de envio, equipe com perfis (admin, gestor, atendente) |
 
 ## Estrutura
@@ -33,7 +35,7 @@ backend/
   plataforma.gs      servidor Apps Script (planilha, webhooks, gatilho de 1 minuto)
   Codigo.gs          arquivo único para colar no Apps Script (gerado)
 docs/                instalação, WhatsApp e integrações (vão para o cliente)
-ferramentas/         montar.js, testar.js e empacotar.js
+ferramentas/         montar.js, testar.js (+ testar-novos.js) e empacotar.js
 ```
 
 ## Comandos
@@ -64,7 +66,11 @@ A página de vendas e o pagamento ficam fora deste projeto, na pasta `prumo-vend
 - [Instalação para o cliente](docs/INSTALACAO.md)
 - [WhatsApp com Evolution API](docs/WHATSAPP_EVOLUTION.md)
 - [WhatsApp com WAHA](docs/WHATSAPP_WAHA.md)
-- [Integrações de captação](docs/INTEGRACOES.md)
+- [Integrações](docs/INTEGRACOES.md)
+- [Equipe comercial: SDR e closer](docs/EQUIPE_COMERCIAL.md)
+- [Economia na API oficial da Meta](docs/ECONOMIA_API_OFICIAL.md)
+- [Arquivo mensal](docs/ARQUIVO_MENSAL.md)
+- [Análise de concorrentes e próximos passos](ANALISE_CONCORRENTES.md) (interno)
 
 ## Referências estudadas
 

@@ -6,12 +6,13 @@
    ========================================================================== */
 (function () {
   'use strict';
-  var CHAVE = 'prumo_demo_v1';
+  var CHAVE = 'prumo_demo_v2';
   var db = null;
 
   function carregar() {
     try { db = JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch (e) { db = null; }
-    if (!db || !db.t) { db = { t: {}, cfg: {}, cache: {} }; semearDemo(); }
+    if (!db || !db.t) { db = { t: {}, cfg: {}, cache: {}, arq: {} }; semearDemo(); }
+    if (!db.arq) db.arq = {};
   }
   var salvarPend = null;
   function salvar() {
@@ -41,6 +42,14 @@
       salvar();
     },
     excluir: function (n, id) { P.excluirVarios(n, [id]); },
+    substituir: function (n, objs) { db.t[n] = objs.map(limpa); salvar(); },
+    // arquivo mensal simulado: cada mês vira um bloco guardado no navegador
+    arquivo: {
+      criar: function (nome) { var id = 'ARQ' + Date.now().toString(36) + (++seq); db.arq[id] = { nome: nome, t: {} }; salvar(); return { id: id, url: '' }; },
+      anexar: function (id, aba, cab, objs) { var a = db.arq[id].t[aba] = db.arq[id].t[aba] || []; var ja = {}; a.forEach(function (o) { ja[o.id] = 1; }); objs.forEach(function (o) { if (!ja[o.id]) a.push(limpa(o)); }); salvar(); },
+      ler: function (id, aba) { return ((db.arq[id] || { t: {} }).t[aba] || []).slice(); },
+      filtrar: function (id, aba, campo, v) { return P.arquivo.ler(id, aba).filter(function (o) { return o[campo] === v; }); }
+    },
     excluirVarios: function (n, ids) { var s = {}; ids.forEach(function (i) { s[i] = 1; }); db.t[n] = t(n).filter(function (o) { return !s[o.id]; }); salvar(); },
     config: function () { return db.cfg; },
     salvarConfig: function (o) { Object.keys(o).forEach(function (k) { db.cfg[k] = String(o[k]); }); salvar(); },
@@ -99,14 +108,16 @@
       WA_PROVEDOR: 'evolution', EVOLUTION_URL: 'https://evolution.demo', EVOLUTION_APIKEY: 'demo', EVOLUTION_INSTANCIA: 'demo',
       HORARIO_INICIO: '00:00', HORARIO_FIM: '23:59', DIAS_ENVIO: '0,1,2,3,4,5,6',
       CAMPOS_PERSONALIZADOS: JSON.stringify([{ chave: 'interesse', rotulo: 'Interesse', tipo: 'texto' }, { chave: 'aniversario', rotulo: 'Aniversário', tipo: 'data' }]),
-      TAGS: 'Lead quente, Cliente, Indicação, Retornar, Pacote mensal'
+      TAGS: 'Lead quente, Cliente, Indicação, Retornar, Pacote mensal', ARQUIVO_FEITO: iso(new Date()).slice(0, 7)
     });
     L.semear({ nome: 'Marina Costa', email: 'demo@prumo.app', senha: 'demo1234' });
     var salt = uuid();
     P.inserirVarios('Usuarios', [
-      { id: 'U2', nome: 'Rafael Lima', email: 'rafael@prumo.app', senha_hash: P.hash('demo1234', salt), salt: salt, perfil: 'atendente', ativo: 'SIM', recebe_leads: 'SIM', cor: '#7C3AED', criado_em: P.agora() },
-      { id: 'U3', nome: 'Juliana Prado', email: 'juliana@prumo.app', senha_hash: P.hash('demo1234', salt), salt: salt, perfil: 'gestor', ativo: 'SIM', recebe_leads: 'SIM', cor: '#DB2777', criado_em: P.agora() }
+      { id: 'U2', nome: 'Rafael Lima', email: 'rafael@prumo.app', senha_hash: P.hash('demo1234', salt), salt: salt, perfil: 'sdr', ativo: 'SIM', recebe_leads: 'SIM', cor: '#7C3AED', criado_em: P.agora(), meta_reunioes: '20' },
+      { id: 'U3', nome: 'Juliana Prado', email: 'juliana@prumo.app', senha_hash: P.hash('demo1234', salt), salt: salt, perfil: 'gestor', ativo: 'SIM', recebe_leads: 'NAO', cor: '#DB2777', criado_em: P.agora() },
+      { id: 'U4', nome: 'Camila Torres', email: 'camila@prumo.app', senha_hash: P.hash('demo1234', salt), salt: salt, perfil: 'closer', ativo: 'SIM', recebe_leads: 'SIM', cor: '#0EA5E9', criado_em: P.agora(), meta_valor: '15000' }
     ]);
+    P.atualizar('Usuarios', 'U1', { meta_valor: '20000' });
     // aplica o funil do segmento
     var mod = PRUMO_MODELOS_SEGMENTO.servicos;
     P.excluirVarios('Etapas', t('Etapas').map(function (e) { return e.id; }));
@@ -155,12 +166,26 @@
       if (i < 22) {
         var et = ['ET1', 'ET2', 'ET3', 'ET4', 'ET5', 'ET6'][Math.floor(rnd() * 6)];
         var tipo = et === 'ET5' ? 'ganho' : et === 'ET6' ? 'perdido' : 'aberto';
+        // parte dos leads foi qualificada pelo SDR (Rafael) e passada para a closer (Camila)
+        var passado = i % 3 === 1 && et !== 'ET1';
+        if (passado) { var salvo = t('Contatos')[t('Contatos').length - 1]; salvo.responsavel_id = c.responsavel_id = 'U4'; salvo.sdr_id = 'U2'; }
+        var reuniao = passado ? iso(new Date(agora + (i % 2 ? 1 : -2) * 86400000 + 3600000 * (i % 5))) : '';
         t('Negocios').push(limpa({
           id: 'N' + (100 + i), titulo: ['Pacote mensal', 'Limpeza de pele', 'Massagem relaxante', 'Depilação a laser'][i % 4] + ' - ' + n.split(' ')[0], contato_id: c.id, funil_id: 'FU1', etapa_id: et,
           valor: String([890, 180, 220, 1450][i % 4] * (1 + Math.floor(rnd() * 2))), responsavel_id: c.responsavel_id || 'U1', status: tipo,
           motivo_perda: tipo === 'perdido' ? ['Preço', 'Sem resposta', 'Comprou do concorrente'][i % 3] : '', previsao: '', notas: '',
-          criado_em: criado, atualizado_em: criado, fechado_em: tipo !== 'aberto' ? iso(new Date(agora - Math.floor(rnd() * 25) * 86400000)) : ''
+          criado_em: criado, atualizado_em: criado, fechado_em: tipo !== 'aberto' ? iso(new Date(agora - Math.floor(rnd() * 25) * 86400000)) : '',
+          sdr_id: passado ? 'U2' : '', passado_em: passado ? iso(new Date(agora - (2 + i % 7) * 86400000)) : '', reuniao_em: reuniao,
+          reuniao_status: passado ? (reuniao < iso(new Date()) ? (i % 4 ? 'realizada' : 'no_show') : 'agendada') : ''
         }));
+      }
+      // conversas antigas (mês passado) para mostrar o arquivo mensal
+      if (i < 8) {
+        var velho = new Date(agora - (35 + i * 3) * 86400000);
+        [['in', 'Oi, vocês atendem aos sábados?'], ['out', 'Atendemos sim, das 9h às 14h. Quer agendar?'], ['in', 'Vou ver minha agenda e volto a falar']].forEach(function (cv, k) {
+          t('Mensagens').push(limpa({ id: 'MV' + i + '_' + k, contato_id: c.id, direcao: cv[0], tipo: 'texto', texto: cv[1], status: cv[0] === 'in' ? 'recebida' : 'enviada', usuario_id: cv[0] === 'out' ? 'U1' : '', origem: cv[0] === 'out' ? 'manual' : 'whatsapp', criado_em: iso(new Date(velho.getTime() + k * 600000)), canal: 'whatsapp' }));
+        });
+        t('Historico').push(limpa({ id: 'HV' + i, data: iso(velho), contato_id: c.id, negocio_id: '', usuario_nome: 'Sistema', acao: 'contato_criado', detalhe: 'Chegou pelo WhatsApp' }));
       }
     });
     var hoje = iso(new Date()).slice(0, 10);

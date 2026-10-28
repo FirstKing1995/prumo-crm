@@ -156,6 +156,80 @@ var PLAT = {
     var r = UrlFetchApp.fetch(url, opt);
     return { code: r.getResponseCode(), text: r.getContentText() };
   },
+  /** Regrava a aba inteira só com as linhas que ficam (usado pelo arquivo mensal). */
+  substituir: function (nome, objs) {
+    var sh = aba_(nome);
+    var cab = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    var lr = sh.getLastRow();
+    var linhas = objs.map(function (o) { return cab.map(function (c) { return o[c] === undefined || o[c] === null ? '' : String(o[c]); }); });
+    if (linhas.length) {
+      var rg = sh.getRange(2, 1, linhas.length, cab.length);
+      rg.setNumberFormat('@');
+      rg.setValues(linhas);
+    }
+    if (lr - 1 > linhas.length) sh.deleteRows(linhas.length + 2, lr - 1 - linhas.length);
+    delete memo_[nome];
+  },
+  /** Planilhas mensais de arquivo, guardadas numa pasta do Drive de quem instalou. */
+  arquivo: {
+    criar: function (nome, nomePasta) {
+      var props = PropertiesService.getScriptProperties();
+      var pasta = null, idPasta = props.getProperty('PASTA_ARQUIVO');
+      if (idPasta) { try { pasta = DriveApp.getFolderById(idPasta); if (pasta.isTrashed()) pasta = null; } catch (e) { pasta = null; } }
+      if (!pasta) {
+        var achadas = DriveApp.getFoldersByName(nomePasta);
+        pasta = achadas.hasNext() ? achadas.next() : DriveApp.createFolder(nomePasta);
+        props.setProperty('PASTA_ARQUIVO', pasta.getId());
+      }
+      var ss = SpreadsheetApp.create(nome);
+      DriveApp.getFileById(ss.getId()).moveTo(pasta);
+      ss.setSpreadsheetTimeZone(FUSO);
+      return { id: ss.getId(), url: ss.getUrl() };
+    },
+    aba: function (id, nome, cab) {
+      var ss = SpreadsheetApp.openById(id);
+      var sh = ss.getSheetByName(nome);
+      if (!sh) {
+        sh = ss.insertSheet(nome);
+        if (cab) { sh.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#E8EEF7'); sh.setFrozenRows(1); }
+        var p1 = ss.getSheetByName('Página1') || ss.getSheetByName('Sheet1');
+        if (p1 && ss.getSheets().length > 1 && p1.getLastRow() === 0) ss.deleteSheet(p1);
+      }
+      return sh;
+    },
+    anexar: function (id, nome, cab, objs) {
+      var sh = PLAT.arquivo.aba(id, nome, cab);
+      var lr = sh.getLastRow();
+      var ja = {};
+      if (lr > 1) sh.getRange(2, 1, lr - 1, 1).getValues().forEach(function (r) { ja[String(r[0])] = 1; }); // não duplica se a rodada anterior parou no meio
+      var linhas = objs.filter(function (o) { return !ja[o.id]; }).map(function (o) { return cab.map(function (c) { return o[c] === undefined || o[c] === null ? '' : String(o[c]); }); });
+      if (!linhas.length) return;
+      var rg = sh.getRange(lr + 1, 1, linhas.length, cab.length);
+      rg.setNumberFormat('@');
+      rg.setValues(linhas);
+    },
+    ler: function (id, nome) {
+      var sh = SpreadsheetApp.openById(id).getSheetByName(nome);
+      if (!sh || sh.getLastRow() < 2) return [];
+      var vals = sh.getDataRange().getDisplayValues();
+      var cab = vals.shift();
+      return vals.map(function (row) { var o = {}; cab.forEach(function (c, i) { if (c) o[c] = row[i]; }); return o; });
+    },
+    filtrar: function (id, nome, campo, valor) {
+      var sh = SpreadsheetApp.openById(id).getSheetByName(nome);
+      if (!sh || sh.getLastRow() < 2) return [];
+      var lc = sh.getLastColumn();
+      var cab = sh.getRange(1, 1, 1, lc).getValues()[0].map(String);
+      var col = cab.indexOf(campo);
+      if (col < 0) return [];
+      return sh.getRange(2, col + 1, sh.getLastRow() - 1, 1).createTextFinder(String(valor)).matchEntireCell(true).findAll().slice(0, 500).map(function (rg) {
+        var row = sh.getRange(rg.getRow(), 1, 1, lc).getDisplayValues()[0];
+        var o = {};
+        cab.forEach(function (c, i) { if (c) o[c] = row[i]; });
+        return o;
+      });
+    }
+  },
   dormir: function (ms) { Utilities.sleep(ms); },
   urlPlanilha: function () { return SpreadsheetApp.getActiveSpreadsheet().getUrl(); },
   urlApp: function () {
@@ -207,7 +281,7 @@ function doPost(e) {
   try { body = JSON.parse(bruto || '{}'); } catch (err) { body = {}; }
   if ((!body || !Object.keys(body).length) && Object.keys(p).length) {
     body = {};
-    Object.keys(p).forEach(function (k) { if (['src', 'k', 'tags', 'origem', 'automacao', 'etapa'].indexOf(k) < 0) body[k] = p[k]; });
+    Object.keys(p).forEach(function (k) { if (['src', 'k', 'tags', 'origem', 'automacao', 'etapa', 'fonte'].indexOf(k) < 0) body[k] = p[k]; });
   }
   // Webhooks (WhatsApp e formulários)
   if (p.src) {
@@ -221,7 +295,7 @@ function doPost(e) {
   }
   // Chamadas do site
   try {
-    var leitura = /^(bootstrap|sync|conversa\.abrir|contato\.ver|relatorio|config\.ver|wa\.status|campanha\.envios|automacao\.execucoes|contato\.publico|publico\.marca)$/.test(body.action);
+    var leitura = /^(bootstrap|sync|conversa\.abrir|contato\.ver|relatorio|config\.ver|wa\.status|campanha\.envios|campanha\.custo|automacao\.execucoes|contato\.publico|publico\.marca|arquivo\.listar|arquivo\.contato|integracao\.testar)$/.test(body.action);
     var exec = function () { return logica_().rotear(body); };
     var dados = leitura ? exec() : comTrava_(exec);
     return json_({ ok: true, data: dados });
@@ -280,6 +354,13 @@ function instalar() {
 function instalarGatilho() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'trabalhar') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('trabalhar').timeBased().everyMinutes(1).create();
+}
+
+/** Arquivo mensal manual: move o que é de meses anteriores para as planilhas mensais no Drive.
+    Roda sozinho todo mês; use esta função só se quiser adiantar. Pode rodar de novo se parar no meio. */
+function arquivarAgora() {
+  var r = comTrava_(function () { return logica_().arquivar(null, 300000); });
+  Logger.log(JSON.stringify(r));
 }
 
 /** Se a URL de webhook aparecer vazia no sistema, rode esta função colando a URL /exec. */

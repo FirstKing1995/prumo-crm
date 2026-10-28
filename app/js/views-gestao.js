@@ -34,13 +34,28 @@
       kpi('raio', 'Conversão', C.pct(ganhos, ganhos + perdidos) + '%') + kpi('conversas', 'Mensagens recebidas', C.inteiro(recebidas)) + kpi('relogio', 'Tempo médio de resposta', r.tempo_resposta_min ? (r.tempo_resposta_min < 60 ? r.tempo_resposta_min + ' min' : Math.round(r.tempo_resposta_min / 60 * 10) / 10 + ' h') : '—') + '</div>';
     h += '<div class="grid-2"><div class="card"><div class="card-cab"><h3>Mensagens por dia</h3><span class="acoes small muted">recebidas · enviadas</span></div><div class="card-pad">' + barrasDuplas(r.dias, periodo) + '</div></div>';
     h += '<div class="card"><div class="card-cab"><h3>De onde vêm os contatos</h3></div><div class="card-pad">' + hbars(r.origens) + '</div></div></div>';
-    h += '<div class="grid-2" style="margin-top:16px"><div class="card"><div class="card-cab"><h3>Desempenho da equipe</h3></div><div class="tabela-wrap"><table class="tab"><thead><tr><th>Pessoa</th><th>Mensagens</th><th>Ganhos</th><th>Valor</th><th>Em aberto</th></tr></thead><tbody>' +
-      r.usuarios.sort(function (a, b) { return b.valor - a.valor; }).map(function (u) { return '<tr style="cursor:default"><td>' + esc(u.nome) + '</td><td class="num">' + u.enviadas + '</td><td class="num">' + u.ganhos + '</td><td class="num">' + C.brl(u.valor) + '</td><td class="num">' + u.abertos + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
+    var sdrs = r.usuarios.filter(function (u) { return u.perfil === 'sdr' || u.perfil === 'atendente'; });
+    var closers = r.usuarios.filter(function (u) { return u.perfil !== 'sdr' && u.perfil !== 'atendente'; });
+    var barraMeta = function (feito, meta) { if (!meta) return '<span class="muted small">sem meta</span>'; var p = Math.min(100, Math.round(feito / meta * 100)); return '<div class="meta-barra" title="' + p + '%"><div style="width:' + p + '%"></div></div><span class="small">' + p + '%</span>'; };
+    if (sdrs.length) {
+      h += '<div class="card" style="margin-top:16px"><div class="card-cab"><h3>' + ic('passar') + ' SDRs: qualificação e reuniões</h3></div><div class="tabela-wrap"><table class="tab"><thead><tr><th>SDR</th><th>Mensagens</th><th>Leads passados</th><th>Reuniões marcadas</th><th>Realizadas</th><th>Faltas</th><th>Meta de reuniões</th></tr></thead><tbody>' +
+        sdrs.sort(function (a, b) { return b.passados - a.passados; }).map(function (u) { return '<tr style="cursor:default"><td>' + esc(u.nome) + '</td><td class="num">' + u.enviadas + '</td><td class="num">' + u.passados + '</td><td class="num">' + u.reunioes + '</td><td class="num">' + u.realizadas + '</td><td class="num">' + u.faltas + (u.realizadas + u.faltas ? ' <span class="small muted">(' + C.pct(u.faltas, u.realizadas + u.faltas) + '%)</span>' : '') + '</td><td><div class="meta-cel">' + barraMeta(u.reunioes, u.meta_reunioes) + '</div></td></tr>'; }).join('') + '</tbody></table></div></div>';
+    }
+    h += '<div class="grid-2" style="margin-top:16px"><div class="card"><div class="card-cab"><h3>' + (sdrs.length ? 'Closers e vendas' : 'Desempenho da equipe') + '</h3></div><div class="tabela-wrap"><table class="tab"><thead><tr><th>Pessoa</th><th>Recebidos</th><th>Ganhos</th><th>Valor</th><th>Em aberto</th><th>Meta</th></tr></thead><tbody>' +
+      closers.sort(function (a, b) { return b.valor - a.valor; }).map(function (u) { return '<tr style="cursor:default"><td>' + esc(u.nome) + '<div class="small muted">' + esc((C.PERFIS[u.perfil] || {}).nome || '') + '</div></td><td class="num">' + u.recebidos + '</td><td class="num">' + u.ganhos + (u.ganhos + u.perdidos ? ' <span class="small muted">(' + C.pct(u.ganhos, u.ganhos + u.perdidos) + '%)</span>' : '') + '</td><td class="num">' + C.brl(u.valor) + '</td><td class="num">' + u.abertos + '</td><td><div class="meta-cel">' + barraMeta(u.valor, u.meta_valor * Math.max(1, Math.round(periodo / 30))) + '</div></td></tr>'; }).join('') + '</tbody></table></div></div>';
     h += '<div class="card"><div class="card-cab"><h3>Motivos de perda</h3></div><div class="card-pad">' + (perdidos ? hbars(r.motivos, 'var(--vermelho)') : '<p class="muted" style="margin:0">Nenhum negócio perdido no período.</p>') + '</div></div></div>';
     h += '<div class="grid-2" style="margin-top:16px"><div class="card"><div class="card-cab"><h3>Disparos</h3></div><div class="tabela-wrap"><table class="tab"><thead><tr><th>Disparo</th><th>Enviados</th><th>Respostas</th><th>Taxa</th></tr></thead><tbody>' +
       (r.campanhas.length ? r.campanhas.map(function (c) { return '<tr style="cursor:default"><td>' + esc(c.nome) + '</td><td class="num">' + c.enviados + '/' + c.total + '</td><td class="num">' + c.respostas + '</td><td class="num">' + C.pct(c.respostas, c.enviados) + '%</td></tr>'; }).join('') : '<tr><td colspan="4" class="muted">Nenhum disparo no período.</td></tr>') + '</tbody></table></div></div>';
     h += '<div class="card"><div class="card-cab"><h3>Automações</h3></div><div class="tabela-wrap"><table class="tab"><thead><tr><th>Automação</th><th>Entradas</th><th>Concluídas</th><th>Situação</th></tr></thead><tbody>' +
       r.automacoes.map(function (a) { return '<tr style="cursor:default"><td>' + esc(a.nome) + '</td><td class="num">' + a.disparos + '</td><td class="num">' + a.concluidas + '</td><td><span class="status ' + (a.ativo === 'SIM' ? 'st-on' : 'st-off') + '">' + (a.ativo === 'SIM' ? 'Ativa' : 'Desligada') + '</span></td></tr>'; }).join('') + '</tbody></table></div></div></div>';
+    var cu = r.custo || {};
+    if (cu.provedor === 'meta' || cu.marketing || cu.servico || cu.utility || cu.gratis) {
+      h += '<div class="card" style="margin-top:16px"><div class="card-cab"><h3>' + ic('dinheiro') + ' Custo estimado da API oficial da Meta</h3></div><div class="card-pad"><div class="kpis" style="margin:0">' +
+        kpi('conversas', 'Atendimento (janela aberta)', C.inteiro(cu.servico)) + kpi('disparos', 'Modelos de marketing', C.inteiro(cu.marketing)) + kpi('nota', 'Modelos de utilidade', C.inteiro(cu.utility)) + kpi('estrela', 'Grátis (anúncio)', C.inteiro(cu.gratis)) +
+        kpi('dinheiro', 'Custo estimado', C.brl(cu.estimado || 0)) + kpi('trofeu', 'Economia estimada', C.brl(Math.max(0, (cu.sem_economia || 0) - (cu.estimado || 0)))) + '</div>' +
+        '<p class="small muted" style="margin:10px 0 0">Estimativa com os preços de Integrações > API oficial. A economia compara com mandar tudo como modelo de marketing. O valor cobrado de verdade aparece no Gerenciador do WhatsApp da Meta.</p></div></div>';
+    }
+    if (r.arquivados) h += '<p class="small muted" style="margin-top:12px">' + ic('arquivo') + ' Este período inclui ' + r.arquivados + ' mês(es) que já estão no arquivo mensal do Drive.</p>';
     box.innerHTML = h;
   }
   function kpi(i, rot, val) { return '<div class="card kpi"><div class="rot">' + ic(i) + rot + '</div><div class="val">' + val + '</div></div>'; }
@@ -82,9 +97,15 @@
     { id: 'waha', grupo: 'WhatsApp', nome: 'WAHA', cor: '#0EA5E9', ic: 'whats', tag: 'Gratuito', desc: 'Alternativa gratuita (versão Core) à Evolution. Também conecta pelo QR Code.' },
     { id: 'meta', grupo: 'WhatsApp', nome: 'API oficial da Meta', cor: '#2563EB', ic: 'escudo', tag: 'Oficial', desc: 'WhatsApp Cloud API. Sem risco de bloqueio por uso de API não oficial. A Meta cobra por mensagem iniciada pela empresa.' },
     { id: 'link', grupo: 'WhatsApp', nome: 'Modo link (sem API)', cor: '#64748B', ic: 'link', tag: 'Sem instalar nada', desc: 'O sistema abre a conversa no seu WhatsApp com o texto pronto e você aperta enviar. Não recebe mensagens nem usa robôs.' },
-    { id: 'entrada', grupo: 'Captação', nome: 'Formulários e sites', cor: '#7C3AED', ic: 'webhook', desc: 'Receba leads de Elementor, WordPress, Typebot, RD Station, Hotmart, Kiwify, Google Forms e qualquer ferramenta que envie webhook.' },
+    { id: 'instagram', grupo: 'Instagram', nome: 'Instagram Direct e comentários', cor: '#C13584', ic: 'instagram', tag: 'API oficial', desc: 'Receba e responda o Direct na mesma caixa de entrada. Quem comentar uma palavra no post recebe a mensagem no Direct, sozinho.' },
+    { id: 'hotmart', grupo: 'Vendas e cursos', nome: 'Hotmart', cor: '#F04E23', ic: 'carrinho', desc: 'Compra aprovada, carrinho abandonado, boleto, reembolso e cancelamento viram tags, negócio ganho e gatilho de automação.' },
+    { id: 'kiwify', grupo: 'Vendas e cursos', nome: 'Kiwify', cor: '#16A34A', ic: 'carrinho', desc: 'Mesmo funcionamento da Hotmart: recupere carrinho, boleto e Pix pelo WhatsApp e marque quem comprou.' },
+    { id: 'activecampaign', grupo: 'E-mail marketing', nome: 'ActiveCampaign', cor: '#356AE6', ic: 'email', desc: 'Leads do ActiveCampaign chegam aqui, e as automações daqui mandam contatos e tags para o ActiveCampaign.' },
+    { id: 'leadads', grupo: 'Captação', nome: 'Anúncios de cadastro', cor: '#0F172A', ic: 'alvo', desc: 'Formulários de anúncios do Facebook, Instagram e TikTok direto para o CRM, com origem e tags.' },
+    { id: 'entrada', grupo: 'Captação', nome: 'Formulários e sites', cor: '#7C3AED', ic: 'webhook', desc: 'Receba leads de Elementor, WordPress, Typebot, RD Station, Google Forms e qualquer ferramenta que envie webhook.' },
     { id: 'form', grupo: 'Captação', nome: 'Formulário pronto', cor: '#DB2777', ic: 'nota', desc: 'Código de formulário para colar no seu site ou página. Cada envio vira contato e pode iniciar uma automação.' },
-    { id: 'saida', grupo: 'Automação externa', nome: 'n8n, Make e Zapier', cor: '#EA580C', ic: 'raio', desc: 'Avise outros sistemas quando um contato é criado, uma mensagem chega ou um negócio é ganho.' },
+    { id: 'saida', grupo: 'Automação externa', nome: 'n8n, Make e Zapier', cor: '#EA580C', ic: 'raio', desc: 'Avise outros sistemas quando um contato é criado, uma mensagem chega, um lead é passado ou uma venda acontece.' },
+    { id: 'api', grupo: 'Automação externa', nome: 'API do sistema', cor: '#334155', ic: 'api', desc: 'Outros sistemas criam contatos, mandam mensagens, colocam tags e iniciam automações por uma URL com chave secreta.' },
     { id: 'planilha', grupo: 'Dados', nome: 'Google Planilhas', cor: '#15803D', ic: 'planilha', tag: 'Conectado', desc: 'Todos os dados ficam numa planilha na sua conta Google. Você é dono deles e pode abrir, filtrar e fazer backup.' }
   ];
 
@@ -95,7 +116,7 @@
     INTEG.forEach(function (i) { (grupos[i.grupo] = grupos[i.grupo] || []).push(i); });
     Object.keys(grupos).forEach(function (g) {
       h += '<h3 style="font-size:14px;margin:22px 0 10px;color:var(--txt-2)">' + g + '</h3><div class="integ-grade">' + grupos[g].map(function (i) {
-        var ativo = i.grupo === 'WhatsApp' && prov === i.id;
+        var ativo = (i.grupo === 'WhatsApp' && prov === i.id) || (i.id === 'instagram' && S.config.instagram) || (i.id === 'activecampaign' && S.config.activecampaign);
         return '<div class="card integ"><div class="integ-cab"><span class="integ-logo" style="background:' + i.cor + '1A;color:' + i.cor + '">' + ic(i.ic) + '</span><div><b>' + i.nome + '</b>' + (ativo ? ' <span class="status st-on">Em uso</span>' : i.tag ? ' <span class="status st-off">' + i.tag + '</span>' : '') + '</div></div>' +
           '<p>' + i.desc + '</p><button class="btn ' + (ativo ? 'pri' : '') + '" data-in="' + i.id + '">' + (i.grupo === 'WhatsApp' ? (ativo ? 'Configurar' : 'Usar e configurar') : 'Abrir') + ' ' + ic('dir') + '</button></div>';
       }).join('') + '</div>';
@@ -145,10 +166,20 @@
         '<li><b>Gere um token permanente</b>Configurações do negócio > Usuários do sistema > Adicionar (admin) > Gerar token com as permissões whatsapp_business_messaging e whatsapp_business_management.</li>' +
         '<li><b>Copie o ID do número</b>Em Configuração da API aparece o "Identificação do número de telefone" (Phone number ID).</li>' +
         '<li><b>Configure o webhook</b>Em WhatsApp > Configuração > Webhook: cole a URL de retorno e o token de verificação mostrados aqui. Depois assine o campo <b>messages</b>.</li>' +
-        '<li><b>Modelos de mensagem</b>Para iniciar conversa (disparos), a Meta exige modelos aprovados. Crie em Gerenciador do WhatsApp > Modelos e use o nome deles nos disparos.</li></ol></div>' +
+        '<li><b>Modelos de mensagem</b>Para iniciar conversa (disparos), a Meta exige modelos aprovados. Crie em Gerenciador do WhatsApp > Modelos e use o nome deles nos disparos.</li></ol>' +
+        '<h3 style="font-size:15px;margin:18px 0 8px">Como o sistema economiza na Meta</h3><ul class="small" style="padding-left:18px;margin-top:0">' +
+        '<li><b>Janela de 24 horas.</b> Cada conversa mostra se a janela está aberta. Dentro dela, respostas são mensagens de atendimento (as primeiras 1.000 do mês são grátis por número). Fora dela, o sistema avisa e pede um modelo.</li>' +
+        '<li><b>Disparos econômicos.</b> Quem está com a janela aberta recebe texto comum; só quem está com a janela fechada recebe o modelo pago. A tela de disparo mostra a estimativa antes de enviar.</li>' +
+        '<li><b>Botões e listas.</b> Menus dos robôs viram botões tocáveis, então a pessoa responde certo de primeira e a conversa gasta menos mensagens.</li>' +
+        '<li><b>Formulário em uma mensagem (WhatsApp Flows).</b> O passo Formulário das automações coleta nome, e-mail e outros dados numa tela só, em vez de várias perguntas.</li>' +
+        '<li><b>Anúncios que levam ao WhatsApp.</b> Quem chega por um anúncio de clique para o WhatsApp abre uma janela grátis (o sistema conta 72 horas; se a Meta mudar o prazo, ajuste em Preços abaixo). O contato fica marcado e as mensagens nesse período não são cobradas.</li></ul></div>' +
         '<div><div class="campo"><label>Token de acesso</label><input class="inp" id="m-token" value="' + esc(CFGA.META_TOKEN) + '" autocomplete="off"></div>' +
         '<div class="campo"><label>Phone number ID</label><input class="inp" id="m-phone" value="' + esc(CFGA.META_PHONE_ID) + '"></div>' +
         '<div class="campo"><label>Token de verificação do webhook (invente uma senha)</label><input class="inp" id="m-verify" value="' + esc(CFGA.META_VERIFY || '') + '"></div>' +
+        '<details style="margin-bottom:12px"><summary class="small"><b>Preços para a estimativa de custo (R$ por mensagem)</b></summary><p class="small muted">Valores aproximados. Confira a tabela atual da Meta para o Brasil e ajuste aqui.</p><div class="grade2">' +
+        '<div class="campo"><label>Marketing</label><input class="inp" id="m-pm" value="' + esc(CFGA.META_PRECO_MARKETING) + '"></div><div class="campo"><label>Utilidade</label><input class="inp" id="m-pu" value="' + esc(CFGA.META_PRECO_UTILITY) + '"></div>' +
+        '<div class="campo"><label>Atendimento (após a franquia)</label><input class="inp" id="m-ps" value="' + esc(CFGA.META_PRECO_SERVICO) + '"></div><div class="campo"><label>Franquia grátis de atendimento por mês</label><input class="inp" id="m-pf" value="' + esc(CFGA.META_FRANQUIA_SERVICO) + '"></div>' +
+        '<div class="campo"><label>Horas grátis após clique em anúncio</label><input class="inp" id="m-pg" value="' + esc(CFGA.META_GRATIS_HORAS) + '"></div></div></details>' +
         '<button class="btn pri" id="m-salvar" data-carregando=" Salvando...">Salvar e usar API oficial</button>' +
         '<div style="margin-top:16px"><span class="rot">URL de retorno (webhook)</span>' + C.copiavel(urlWa) + '</div>' + blocoTeste() + '</div></div>';
     } else if (id === 'link') {
@@ -187,10 +218,11 @@
       corpo = '<p style="margin-top:0">Cadastre URLs que recebem um POST em JSON quando algo acontece. No n8n use o nó Webhook; no Make, o módulo Custom webhook; no Zapier, "Catch Hook".</p><div id="s-lista"></div><button class="btn peq" id="s-add">' + ic('plus') + ' Adicionar URL</button>' +
         '<h3 style="font-size:14px;margin:18px 0 6px">Exemplo do que chega</h3><code class="bloco">{\n  "evento": "contato.criado",\n  "sistema": "' + esc((S.config.marca || {}).nome) + '",\n  "data": "2026-10-27T14:30:00",\n  "dados": { "contato": { "nome": "...", "telefone": "...", "tags": [] } }\n}</code>';
       pe = '<button class="btn" data-fechar>Fechar</button><button class="btn pri" id="s-salvar" data-carregando=" Salvando...">Salvar</button>';
-      var EVS = [['contato.criado', 'Contato criado'], ['mensagem.recebida', 'Mensagem recebida'], ['negocio.ganho', 'Negócio ganho'], ['negocio.perdido', 'Negócio perdido']];
+      var EVS = [['contato.criado', 'Contato criado'], ['mensagem.recebida', 'Mensagem recebida'], ['negocio.ganho', 'Negócio ganho'], ['negocio.perdido', 'Negócio perdido'], ['lead.passado', 'Lead passado para closer'], ['reuniao.agendada', 'Reunião agendada'], ['compra.compra_aprovada', 'Compra aprovada'], ['compra.carrinho_abandonado', 'Carrinho abandonado']];
       var el0;
       setTimeout(function () {
         el0 = C.$('#s-lista');
+        if (!el0) return; // janela fechada antes de montar
         var pinta = function () {
           el0.innerHTML = lista.map(function (w, k) {
             return '<div class="card" style="padding:12px;margin-bottom:10px"><div class="linha" style="align-items:center"><input class="inp" data-su="' + k + '" value="' + esc(w.url || '') + '" placeholder="https://..."><button class="btn fantasma ic perigo" data-sd="' + k + '" style="flex:0 0 38px" aria-label="Remover">' + ic('lixo') + '</button></div>' +
@@ -204,6 +236,57 @@
         C.$('#s-add').onclick = function () { lista.push({ url: '', eventos: [] }); pinta(); };
         C.$('#s-salvar').onclick = function () { var b = this; C.comBotao(b, function () { return salvarCfg({ WEBHOOKS_SAIDA: JSON.stringify(lista.filter(function (w) { return w.url; })) }).then(function () { C.toast('Webhooks salvos', 'ok'); }); }); };
       }, 0);
+    } else if (id === 'instagram') {
+      corpo = semUrl + '<div class="grid-2" style="align-items:start"><div><h3 style="font-size:15px;margin-bottom:12px">Tutorial</h3><ol class="passos-tut">' +
+        '<li><b>Conta profissional</b>No app do Instagram: Configurações > Tipo de conta > mude para Profissional (Empresa ou Criador de conteúdo).</li>' +
+        '<li><b>Crie o app na Meta</b>developers.facebook.com > Meus apps > Criar app > tipo Empresa. Adicione o produto <b>Instagram</b> e escolha "API com login do Instagram".</li>' +
+        '<li><b>Gere o token</b>Em Instagram > Configuração da API, adicione a sua conta e clique em Gerar token. Copie o token e o ID da conta do Instagram (aparece logo acima).</li>' +
+        '<li><b>Configure o webhook</b>Na mesma tela, em Webhooks: cole a URL de retorno e o token de verificação mostrados aqui (o mesmo da API oficial do WhatsApp; se não usa a API oficial, invente um e salve abaixo). Assine os campos <b>messages</b> e <b>comments</b>.</li>' +
+        '<li><b>Libere as mensagens</b>No app do Instagram: Configurações > Mensagens e respostas > Ferramentas conectadas > Permitir acesso às mensagens.</li>' +
+        '<li><b>Crie a automação</b>Em Automações, use o gatilho <b>Comentou no Instagram</b> com a palavra (ex.: EU QUERO). A primeira mensagem vai como resposta privada no Direct.</li></ol>' +
+        '<p class="small muted">O Instagram só deixa responder no Direct até 24 horas depois da última mensagem da pessoa. Enquanto o app da Meta estiver em modo de desenvolvimento, só contas de teste conseguem conversar.</p></div>' +
+        '<div><div class="campo"><label>Token de acesso do Instagram</label><input class="inp" id="ig-token" value="' + esc(CFGA.IG_TOKEN) + '" autocomplete="off"></div>' +
+        '<div class="campo"><label>ID da conta do Instagram</label><input class="inp" id="ig-id" value="' + esc(CFGA.IG_ID) + '"></div>' +
+        '<div class="campo"><label>Token de verificação do webhook</label><input class="inp" id="ig-verify" value="' + esc(CFGA.META_VERIFY || '') + '"></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" id="ig-salvar" data-carregando=" Salvando...">Salvar</button><button class="btn" id="ig-testar" data-carregando=" Testando...">' + ic('play') + ' Testar conexão</button></div>' +
+        '<div id="ig-res" style="margin-top:10px"></div><div style="margin-top:16px"><span class="rot">URL de retorno (webhook)</span>' + C.copiavel(urlWa) + '</div></div></div>';
+    } else if (id === 'hotmart' || id === 'kiwify') {
+      var plat = id === 'hotmart' ? 'Hotmart' : 'Kiwify';
+      var urlP = (CFGA.URL_WEBHOOK_VENDAS || '(rode a função instalar de novo no Apps Script para gerar esta URL)') + '&fonte=' + id + '&origem=' + plat;
+      corpo = '<p style="margin-top:0">Cada evento de venda da ' + plat + ' cria ou atualiza o contato, coloca uma tag e pode iniciar uma automação de WhatsApp. Compra aprovada vira negócio ganho com o valor da venda e tira a pessoa das automações de recuperação.</p>' +
+        '<span class="rot">URL para colar na ' + plat + '</span>' + C.copiavel(urlP) + '<p class="small muted">Esta URL é só para as plataformas de venda: não use no site nem em formulários. Pela URL de formulários, eventos de compra são ignorados, para ninguém conseguir registrar uma venda falsa.</p>' +
+        '<h3 style="font-size:14.5px;margin:18px 0 8px">Onde colar</h3><ol class="passos-tut">' +
+        (id === 'hotmart' ? '<li><b>Hotmart</b>Ferramentas > Webhook (API e notificações) > Cadastrar webhook. Cole a URL, escolha o produto e marque os eventos: Compra aprovada, Compra completa, Abandono de carrinho, Boleto impresso, Reembolso, Chargeback e Cancelamento. Versão 2.0.</li>'
+          : '<li><b>Kiwify</b>Apps > Webhooks > Criar webhook. Cole a URL, escolha o produto e marque: Compra aprovada, Carrinho abandonado, Boleto gerado, Pix gerado, Compra recusada, Reembolso, Chargeback e Assinatura cancelada.</li>') +
+        '<li><b>Crie as automações</b>Em Automações > Usar um modelo: <b>Recuperar carrinho abandonado</b>, <b>Lembrete de boleto e Pix</b> e <b>Boas-vindas ao comprador</b>. Elas já usam o gatilho Evento de venda.</li>' +
+        '<li><b>Teste</b>As duas plataformas têm um botão de enviar teste na tela do webhook. O contato aparece em Contatos com a tag "' + plat + ': ..."</li></ol>' +
+        '<h3 style="font-size:14.5px;margin:18px 0 8px">Tags que o sistema coloca</h3><div class="chips">' + ['Comprou', 'Carrinho abandonado', 'Boleto gerado', 'Pix gerado', 'Reembolso', 'Cancelou', 'Pagamento recusado'].map(function (t) { return '<span class="chip">' + plat + ': ' + t + '</span>'; }).join('') + '</div>';
+    } else if (id === 'activecampaign') {
+      corpo = '<div class="grid-2" style="align-items:start"><div><h3 style="font-size:15px;margin-bottom:10px">Do ActiveCampaign para cá</h3><p class="small" style="margin-top:0">Na automação do ActiveCampaign, adicione a ação <b>Webhook</b> com esta URL. O contato chega com nome, e-mail, telefone e tags.</p>' + C.copiavel(urlEnt + '&fonte=activecampaign&origem=ActiveCampaign') +
+        '<p class="small muted">Você também pode usar Configurações > Desenvolvedor > Webhooks do ActiveCampaign para avisar em toda inscrição numa lista.</p>' +
+        '<h3 style="font-size:15px;margin:18px 0 10px">Daqui para o ActiveCampaign</h3><ol class="passos-tut"><li><b>Pegue a URL e a chave</b>No ActiveCampaign: Configurações > Desenvolvedor. Copie a URL da API e a chave.</li><li><b>Cole ao lado e teste</b>O teste mostra as suas listas para você escolher.</li><li><b>Use nas automações</b>O passo <b>Enviar ao ActiveCampaign</b> cria ou atualiza o contato, coloca na lista e aplica as tags que você escolher (ex.: Lead qualificado no WhatsApp).</li></ol></div>' +
+        '<div><div class="campo"><label>URL da API</label><input class="inp" id="ac-url" value="' + esc(CFGA.AC_URL) + '" placeholder="https://suaconta.api-us1.com"></div>' +
+        '<div class="campo"><label>Chave da API</label><input class="inp" id="ac-token" value="' + esc(CFGA.AC_TOKEN) + '" autocomplete="off"></div>' +
+        '<div class="campo"><label>Lista padrão (opcional)</label><select class="inp" id="ac-lista"><option value="">Nenhuma</option>' + (CFGA.AC_LISTA ? '<option value="' + esc(CFGA.AC_LISTA) + '" selected>Lista ' + esc(CFGA.AC_LISTA) + '</option>' : '') + '</select></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" id="ac-salvar" data-carregando=" Salvando...">Salvar</button><button class="btn" id="ac-testar" data-carregando=" Testando...">' + ic('play') + ' Testar e carregar listas</button></div><div id="ac-res" style="margin-top:10px"></div></div></div>';
+    } else if (id === 'leadads') {
+      corpo = '<p style="margin-top:0">Quem preenche o formulário de um anúncio vira contato aqui na hora, com a origem certa, e pode receber a primeira mensagem no WhatsApp em segundos. O sistema entende o formato das respostas do Facebook, do Instagram e do TikTok.</p>' +
+        '<h3 style="font-size:14.5px;margin:14px 0 8px">Facebook e Instagram (Lead Ads)</h3><ol class="passos-tut"><li><b>Make ou Zapier</b>Gatilho "Facebook Lead Ads > New Lead". Ação "HTTP > Make a request" (Make) ou "Webhooks by Zapier > POST", método POST, corpo JSON com os campos do lead.</li><li><b>Cole a URL</b>' + C.copiavel(urlEnt + '&fonte=facebook&origem=Anúncio%20Facebook&tags=Lead%20anúncio') + '</li></ol>' +
+        '<h3 style="font-size:14.5px;margin:14px 0 8px">TikTok (Formulário instantâneo)</h3><ol class="passos-tut"><li><b>Direto pelo TikTok</b>No TikTok Ads Manager, na área de Leads (formulário instantâneo), procure a integração com CRM por webhook. Cole a URL abaixo e envie um teste. Se a sua conta não mostrar essa opção, use o caminho seguinte.</li><li><b>Ou por Make/Zapier</b>Gatilho "TikTok Lead Generation > New Lead" e ação de webhook POST para a mesma URL.</li><li><b>URL</b>' + C.copiavel(urlEnt + '&fonte=tiktok&origem=Anúncio%20TikTok&tags=Lead%20TikTok') + '</li></ol>' +
+        '<p class="small muted">Dica: crie a automação "Boas-vindas para lead de anúncio" com o gatilho Webhook recebido e a origem do anúncio. Responder nos primeiros 5 minutos aumenta muito a chance de conversa.</p>';
+    } else if (id === 'api') {
+      corpo = '<p style="margin-top:0">Para programadores e ferramentas como n8n, Make, Zapier ou seu próprio site. Toda chamada é um POST em JSON para a URL abaixo. <b>Não publique esta URL</b>: quem tiver a chave consegue mandar mensagens pelo seu WhatsApp.</p>' +
+        (CFGA.URL_API ? '<span class="rot">URL da API</span>' + C.copiavel(CFGA.URL_API) : '<div class="aviso">' + ic('info') + '<div>A API ainda está desligada. Gere a chave para ligar.</div></div>') +
+        '<button class="btn ' + (CFGA.URL_API ? 'perigo' : 'pri') + '" id="api-chave" style="margin:10px 0">' + ic('atualizar') + (CFGA.URL_API ? ' Gerar nova chave (a antiga para de funcionar)' : ' Gerar chave e ligar a API') + '</button>' +
+        '<h3 style="font-size:14.5px;margin:14px 0 8px">Ações</h3><table class="tab"><tbody>' + [
+          ['contato.salvar', 'Cria ou atualiza: nome, telefone, email, empresa, cidade, origem, tags, campos'],
+          ['contato.buscar', 'Busca por contato_id, telefone ou email'],
+          ['tag.adicionar / tag.remover', 'telefone ou email + tags'],
+          ['mensagem.enviar', 'telefone ou email + texto (aceita {primeiro_nome})'],
+          ['automacao.iniciar', 'telefone ou email + automacao (nome) ou automacao_id'],
+          ['negocio.etapa', 'telefone ou email + etapa_id']
+        ].map(function (a) { return '<tr style="cursor:default"><td><code>' + a[0] + '</code></td><td class="small">' + a[1] + '</td></tr>'; }).join('') + '</tbody></table>' +
+        '<span class="rot" style="margin-top:12px;display:block">Exemplo</span><code class="bloco">POST ' + esc(CFGA.URL_API || 'URL_DA_API') + '\nContent-Type: application/json\n\n{ "acao": "mensagem.enviar", "telefone": "11999998888", "texto": "Oi {primeiro_nome}, seu pedido saiu!" }</code>';
     } else if (id === 'planilha') {
       corpo = '<p style="margin-top:0">O sistema guarda tudo numa planilha do Google Planilhas na conta de quem instalou. Cada aba é uma tabela: Contatos, Negocios, Mensagens, Automacoes, Campanhas e assim por diante.</p><ul><li>Para fazer backup: Arquivo > Fazer uma cópia (ou Fazer download em Excel).</li><li>Evite apagar colunas ou mudar o nome das abas.</li><li>Pode criar abas novas com gráficos e fórmulas à vontade.</li></ul>' +
         (CFGA.URL_PLANILHA ? '<a class="btn pri" href="' + esc(CFGA.URL_PLANILHA) + '" target="_blank" rel="noopener">' + ic('externo') + ' Abrir minha planilha</a>' : '<p class="muted">No modo demonstração não existe planilha.</p>');
@@ -220,7 +303,26 @@
     on('#e-con', function () { var b = this; C.comBotao(b, function () { return C.api('wa.conectar').then(function (r) { mostrarQr(el.querySelector('#e-qr'), r); }); }); });
     on('#w-salvar', function () { var b = this; C.comBotao(b, function () { return salvarCfg({ WA_PROVEDOR: 'waha', WAHA_URL: el.querySelector('#w-url').value.trim(), WAHA_APIKEY: el.querySelector('#w-key').value.trim(), WAHA_SESSAO: el.querySelector('#w-ses').value.trim() || 'default' }).then(function () { C.toast('WAHA salvo. Agora clique em Conectar.', 'ok'); }); }); });
     on('#w-con', function () { var b = this; C.comBotao(b, function () { return C.api('wa.conectar').then(function (r) { mostrarQr(el.querySelector('#w-qr'), r); }); }); });
-    on('#m-salvar', function () { var b = this; C.comBotao(b, function () { var v = el.querySelector('#m-verify').value.trim(); if (v.length < 8) throw new Error('Invente um token de verificação com pelo menos 8 caracteres.'); return salvarCfg({ WA_PROVEDOR: 'meta', META_TOKEN: el.querySelector('#m-token').value.trim(), META_PHONE_ID: el.querySelector('#m-phone').value.trim(), META_VERIFY: v }).then(function () { C.toast('API oficial salva', 'ok'); }); }); });
+    on('#m-salvar', function () { var b = this; C.comBotao(b, function () { var v = el.querySelector('#m-verify').value.trim(); if (v.length < 8) throw new Error('Invente um token de verificação com pelo menos 8 caracteres.'); return salvarCfg({ WA_PROVEDOR: 'meta', META_TOKEN: el.querySelector('#m-token').value.trim(), META_PHONE_ID: el.querySelector('#m-phone').value.trim(), META_VERIFY: v, META_PRECO_MARKETING: el.querySelector('#m-pm').value.replace(',', '.'), META_PRECO_UTILITY: el.querySelector('#m-pu').value.replace(',', '.'), META_PRECO_SERVICO: el.querySelector('#m-ps').value.replace(',', '.'), META_FRANQUIA_SERVICO: el.querySelector('#m-pf').value, META_GRATIS_HORAS: el.querySelector('#m-pg').value }).then(function () { C.toast('API oficial salva', 'ok'); }); }); });
+    on('#ig-salvar', function () { var b = this; C.comBotao(b, function () { var v = el.querySelector('#ig-verify').value.trim(); if (v.length < 8) throw new Error('Invente um token de verificação com pelo menos 8 caracteres.'); return salvarCfg({ IG_TOKEN: el.querySelector('#ig-token').value.trim(), IG_ID: el.querySelector('#ig-id').value.trim(), META_VERIFY: v }).then(function () { S.config.instagram = !!el.querySelector('#ig-id').value.trim(); C.toast('Instagram salvo', 'ok'); }); }); });
+    on('#ig-testar', function () { var b = this; C.comBotao(b, function () { return C.api('integracao.testar', { qual: 'instagram' }).then(function (r) { el.querySelector('#ig-res').innerHTML = '<div class="aviso ' + (r.conectado ? 'ok' : 'erro') + '">' + ic(r.conectado ? 'check' : 'alerta') + '<div>' + esc(r.texto) + '</div></div>'; }); }); });
+    on('#ac-salvar', function () { var b = this; C.comBotao(b, function () { return salvarCfg({ AC_URL: el.querySelector('#ac-url').value.trim(), AC_TOKEN: el.querySelector('#ac-token').value.trim(), AC_LISTA: el.querySelector('#ac-lista').value }).then(function () { S.config.activecampaign = true; C.toast('ActiveCampaign salvo', 'ok'); }); }); });
+    on('#ac-testar', function () {
+      var b = this;
+      C.comBotao(b, function () {
+        return salvarCfg({ AC_URL: el.querySelector('#ac-url').value.trim(), AC_TOKEN: el.querySelector('#ac-token').value.trim() }).then(function () { return C.api('integracao.testar', { qual: 'activecampaign' }); }).then(function (r) {
+          var sel = el.querySelector('#ac-lista'), atual = sel.value;
+          sel.innerHTML = '<option value="">Nenhuma</option>' + r.listas.map(function (l) { return '<option value="' + esc(l.id) + '"' + (String(l.id) === atual ? ' selected' : '') + '>' + esc(l.nome) + '</option>'; }).join('');
+          el.querySelector('#ac-res').innerHTML = '<div class="aviso ok">' + ic('check') + '<div>Conectado. ' + r.listas.length + ' listas encontradas. Escolha a lista e salve.</div></div>';
+        });
+      });
+    });
+    on('#api-chave', function () {
+      C.confirmar(CFGA.URL_API ? 'Gerar uma nova chave? Tudo que usa a chave atual para de funcionar.' : 'Ligar a API do sistema?', { perigo: !!CFGA.URL_API, botao: 'Gerar chave' }).then(function (ok) {
+        if (!ok) return;
+        return C.api('config.chave', { qual: 'api' }).then(function (c) { CFGA = c; el.fechar(); abrirIntegracao('api'); });
+      }).catch(function (e) { C.toast(e.message, 'erro'); });
+    });
     on('#l-salvar', function () { var b = this; C.comBotao(b, function () { return salvarCfg({ WA_PROVEDOR: 'link', WA_NUMERO: el.querySelector('#l-num').value.replace(/\D/g, '') }).then(function () { C.toast('Modo link ativado', 'ok'); el.fechar(); C.render(); }); }); });
     on('#wt-env', function () { var b = this; C.comBotao(b, function () { return C.api('wa.testar', { telefone: el.querySelector('#wt-num').value }).then(function () { C.toast('Mensagem de teste enviada', 'ok'); }); }); });
     on('#t-env', function () { var b = this; C.comBotao(b, function () { return C.api('webhook.testar', { json: el.querySelector('#t-json').value }).then(function (r) { C.toast('Funcionou: contato ' + (r.novo ? 'criado' : 'atualizado'), 'ok'); C.recarregar(); }); }); });
@@ -260,10 +362,10 @@
   C.views.ajustes = {
     titulo: 'Ajustes',
     render: function (el) {
-      var abas = [['marca', 'Marca e cores'], ['funis', 'Funis'], ['campos', 'Campos e listas'], ['modelos', 'Respostas rápidas'], ['regras', 'Regras de envio'], ['equipe', 'Equipe'], ['sistema', 'Sistema']];
+      var abas = [['marca', 'Marca e cores'], ['funis', 'Funis'], ['campos', 'Campos e listas'], ['modelos', 'Respostas rápidas'], ['regras', 'Regras'], ['sistema', 'Sistema e arquivo']];
       el.innerHTML = '<div class="abas">' + abas.map(function (a) { return '<button data-aj="' + a[0] + '" class="' + (abaAj === a[0] ? 'on' : '') + '">' + a[1] + '</button>'; }).join('') + '</div><div id="aj"><div style="text-align:center;padding:40px"><span class="spin" style="color:var(--pri)"></span></div></div>';
       C.$$('[data-aj]', el).forEach(function (b) { b.onclick = function () { abaAj = b.dataset.aj; C.render(); }; });
-      carregarCfg().then(function () { ({ marca: ajMarca, funis: ajFunis, campos: ajCampos, modelos: ajModelos, regras: ajRegras, equipe: ajEquipe, sistema: ajSistema })[abaAj](C.$('#aj')); }).catch(function (e) { C.toast(e.message, 'erro'); });
+      carregarCfg().then(function () { ({ marca: ajMarca, funis: ajFunis, campos: ajCampos, modelos: ajModelos, regras: ajRegras, sistema: ajSistema })[abaAj](C.$('#aj')); }).catch(function (e) { C.toast(e.message, 'erro'); });
     }
   };
 
@@ -402,46 +504,85 @@
       '<label class="check"><input type="checkbox" id="rg-dist"' + (CFGA.DISTRIBUIR_AUTO === 'SIM' ? ' checked' : '') + '> Distribuir novos contatos em rodízio entre quem "recebe leads"</label>' +
       '<label class="check"><input type="checkbox" id="rg-vertodos"' + (CFGA.ATENDENTE_VE_TODOS === 'SIM' ? ' checked' : '') + '> Atendentes veem todos os contatos (desmarcado: só os seus e os sem responsável)</label>' +
       '<div class="campo"><label>Palavras para sair da lista</label><input class="inp" id="rg-out" value="' + esc(CFGA.OPTOUT_PALAVRAS) + '"></div>' +
-      '<div class="campo"><label>Resposta para quem pede para sair</label><textarea class="inp" id="rg-outr" rows="2">' + esc(CFGA.OPTOUT_RESPOSTA) + '</textarea></div></div></div><div style="margin-top:14px">' + botaoSalvar('rg-ok') + '</div>';
+      '<div class="campo"><label>Resposta para quem pede para sair</label><textarea class="inp" id="rg-outr" rows="2">' + esc(CFGA.OPTOUT_RESPOSTA) + '</textarea></div></div></div>' +
+      '<div class="card card-pad" style="margin-top:16px"><h3 style="font-size:15px;margin-bottom:4px">Equipe comercial (SDR e closer)</h3><p class="small muted" style="margin-top:0">Novos leads entram no rodízio dos SDRs. Quando o SDR passa o lead, o negócio vai para o closer.</p><div class="grid-2" style="align-items:start"><div>' +
+      '<div class="campo"><label>Etapa do funil quando o SDR passa o lead</label><select class="inp" id="rg-etapa"><option value="">Mantém a etapa atual (ou a primeira)</option>' + S.funis.map(function (f) { return '<optgroup label="' + esc(f.nome) + '">' + f.etapas.filter(function (e) { return e.tipo === 'aberto'; }).map(function (e) { return '<option value="' + e.id + '"' + (CFGA.PASSAR_ETAPA === e.id ? ' selected' : '') + '>' + esc(e.nome) + '</option>'; }).join('') + '</optgroup>'; }).join('') + '</select></div>' +
+      '<div class="campo"><label>Responder um lead em até (minutos)</label><input class="inp" type="number" min="1" id="rg-sla" value="' + esc(CFGA.SLA_MINUTOS) + '"><span class="ajuda">Passou disso, a conversa aparece em vermelho no painel e na caixa de entrada.</span></div></div><div>' +
+      '<label class="check"><input type="checkbox" id="rg-lemb"' + (CFGA.LEMBRETE_REUNIAO === 'SIM' ? ' checked' : '') + '> Mandar lembrete automático da reunião para o lead</label>' +
+      '<div class="grade2"><div class="campo"><label>Quantas horas antes</label><input class="inp" type="number" min="1" id="rg-lh" value="' + esc(CFGA.LEMBRETE_HORAS) + '"></div><div class="campo"><label>Modelo da Meta (só API oficial)</label><input class="inp" id="rg-lm" value="' + esc(CFGA.LEMBRETE_MODELO) + '" placeholder="lembrete_reuniao"></div></div>' +
+      '<div class="campo"><label>Texto do lembrete</label><textarea class="inp" id="rg-lt" rows="2">' + esc(CFGA.LEMBRETE_TEXTO) + '</textarea><span class="ajuda">Use {primeiro_nome}, {hora_reuniao} e {data_reuniao}.</span></div></div></div></div>' +
+      '<div style="margin-top:14px">' + botaoSalvar('rg-ok') + '</div>';
     C.$('#rg-ok').onclick = function () {
       var b = this;
       C.comBotao(b, function () {
         return salvarCfg({
           HORARIO_INICIO: C.$('#rg-ini').value, HORARIO_FIM: C.$('#rg-fim').value, DIAS_ENVIO: C.$$('[data-dia]').filter(function (x) { return x.checked; }).map(function (x) { return x.dataset.dia; }).join(','),
           BOT_PAUSA_HORAS: C.$('#rg-pausa').value, DISTRIBUIR_AUTO: C.$('#rg-dist').checked ? 'SIM' : 'NAO', ATENDENTE_VE_TODOS: C.$('#rg-vertodos').checked ? 'SIM' : 'NAO',
-          OPTOUT_PALAVRAS: C.$('#rg-out').value, OPTOUT_RESPOSTA: C.$('#rg-outr').value
-        }).then(function () { C.toast('Regras salvas', 'ok'); });
+          OPTOUT_PALAVRAS: C.$('#rg-out').value, OPTOUT_RESPOSTA: C.$('#rg-outr').value,
+          PASSAR_ETAPA: C.$('#rg-etapa').value, SLA_MINUTOS: C.$('#rg-sla').value, LEMBRETE_REUNIAO: C.$('#rg-lemb').checked ? 'SIM' : 'NAO',
+          LEMBRETE_HORAS: C.$('#rg-lh').value, LEMBRETE_MODELO: C.$('#rg-lm').value.trim(), LEMBRETE_TEXTO: C.$('#rg-lt').value
+        }).then(function () { S.config.sla_minutos = C.num(C.$('#rg-sla').value); C.toast('Regras salvas', 'ok'); });
       });
     };
   }
 
-  function ajEquipe(box) {
-    var PERF = { admin: 'Administrador (tudo)', gestor: 'Gestor (tudo menos ajustes, equipe e integrações)', atendente: 'Atendente (conversas e seus contatos)' };
-    box.innerHTML = '<div class="barra-ferr"><p class="muted" style="margin:0">Sem limite de usuários. Cada pessoa tem login próprio.</p><div class="dir"><button class="btn pri" id="eq-novo">' + ic('usuarioMais') + ' Adicionar pessoa</button></div></div>' +
-      '<div class="card"><div class="tabela-wrap"><table class="tab"><thead><tr><th>Pessoa</th><th>Perfil</th><th class="esconde-mob">Recebe leads</th><th class="esconde-mob">Último acesso</th><th>Situação</th></tr></thead><tbody>' +
-      S.usuarios.map(function (u) { return '<tr data-u="' + u.id + '"><td><div class="pessoa">' + C.av(u.nome, '', u.cor) + '<div class="trunc"><b>' + esc(u.nome) + '</b><span class="small muted">' + esc(u.email) + '</span></div></div></td><td>' + esc((PERF[u.perfil] || u.perfil).split(' (')[0]) + '</td><td class="esconde-mob">' + (u.recebe_leads === 'SIM' ? 'Sim' : 'Não') + '</td><td class="esconde-mob small muted">' + (u.ultimo_acesso ? C.fmtData(u.ultimo_acesso) : 'nunca') + '</td><td><span class="status ' + (u.ativo === 'SIM' ? 'st-on' : 'st-off') + '">' + (u.ativo === 'SIM' ? 'Ativo' : 'Bloqueado') + '</span></td></tr>'; }).join('') + '</tbody></table></div></div>';
-    var form = function (u) {
-      u = u || {};
-      var el = C.modal({
-        titulo: u.id ? 'Editar pessoa' : 'Adicionar pessoa',
-        corpo: '<div class="campo"><label>Nome</label><input class="inp" id="u-nome" value="' + esc(u.nome || '') + '"></div><div class="campo"><label>E-mail (login)</label><input class="inp" type="email" id="u-email" value="' + esc(u.email || '') + '"></div>' +
-          '<div class="campo"><label>Perfil</label><select class="inp" id="u-perfil">' + Object.keys(PERF).map(function (k) { return '<option value="' + k + '"' + ((u.perfil || 'atendente') === k ? ' selected' : '') + '>' + PERF[k] + '</option>'; }).join('') + '</select></div>' +
-          '<div class="campo"><label>' + (u.id ? 'Nova senha (deixe em branco para manter)' : 'Senha inicial (mínimo 8 caracteres)') + '</label><input class="inp" type="text" id="u-senha" autocomplete="new-password"></div>' +
-          '<div class="grade2"><label class="check"><input type="checkbox" id="u-recebe"' + (u.recebe_leads === 'SIM' ? ' checked' : '') + '> Recebe leads no rodízio</label><label class="check"><input type="checkbox" id="u-ativo"' + (u.ativo !== 'NAO' ? ' checked' : '') + '> Acesso liberado</label></div>' +
-          '<div class="campo"><label>Cor do avatar</label><input type="color" class="inp-cor" id="u-cor" value="' + esc(u.cor || C.corDe(u.nome || 'x')) + '"></div>',
-        pe: '<button class="btn" data-fechar>Cancelar</button><button class="btn pri" id="u-ok" data-carregando=" Salvando...">Salvar</button>'
-      });
-      el.querySelector('#u-ok').onclick = function () {
-        C.comBotao(this, function () {
-          return C.api('usuario.salvar', { usuario: { id: u.id, nome: el.querySelector('#u-nome').value, email: el.querySelector('#u-email').value, perfil: el.querySelector('#u-perfil').value, senha: el.querySelector('#u-senha').value, recebe_leads: el.querySelector('#u-recebe').checked ? 'SIM' : 'NAO', ativo: el.querySelector('#u-ativo').checked ? 'SIM' : 'NAO', cor: el.querySelector('#u-cor').value } })
-            .then(function () { el.fechar(); C.toast('Equipe atualizada. Envie o e-mail e a senha para a pessoa.', 'ok'); return C.recarregar(); });
+  /* ======================================================= EQUIPE (só admin) */
+  C.views.equipe = {
+    titulo: 'Equipe e acessos',
+    render: function (el) {
+      var cont = {};
+      S.usuarios.forEach(function (u) { cont[u.perfil] = (cont[u.perfil] || 0) + (u.ativo === 'SIM' ? 1 : 0); });
+      var ordem = ['admin', 'gestor', 'sdr', 'closer'];
+      el.innerHTML = '<div class="barra-ferr"><p class="muted" style="margin:0">Crie uma conta para cada pessoa. Sem limite de usuários. Só o administrador vê esta tela.</p><div class="dir"><button class="btn pri" id="eq-novo">' + ic('usuarioMais') + ' Criar conta</button></div></div>' +
+        '<div class="perfis-grade">' + ordem.map(function (k) {
+          return '<div class="card perfil-card"><div class="perfil-cab"><b>' + C.PERFIS[k].nome + '</b><span class="chip">' + (cont[k] || 0) + ' ativo' + ((cont[k] || 0) === 1 ? '' : 's') + '</span></div><p>' + C.PERFIS[k].desc + '</p><button class="btn peq" data-criar="' + k + '">' + ic('plus') + ' Criar ' + C.PERFIS[k].nome + '</button></div>';
+        }).join('') + '</div>' +
+        '<div class="card" style="margin-top:16px"><div class="tabela-wrap"><table class="tab"><thead><tr><th>Pessoa</th><th>Perfil</th><th class="esconde-mob">Meta do mês</th><th class="esconde-mob">Recebe leads</th><th class="esconde-mob">Último acesso</th><th>Situação</th></tr></thead><tbody>' +
+        S.usuarios.slice().sort(function (a, b) { return ordem.indexOf(a.perfil) - ordem.indexOf(b.perfil); }).map(function (u) {
+          var meta = u.perfil === 'closer' || u.perfil === 'admin' || u.perfil === 'gestor' ? (C.num(u.meta_valor) ? C.brl(C.num(u.meta_valor)) : '—') : (C.num(u.meta_reunioes) ? u.meta_reunioes + ' reuniões' : '—');
+          return '<tr data-u="' + u.id + '"><td><div class="pessoa">' + C.av(u.nome, '', u.cor) + '<div class="trunc"><b>' + esc(u.nome) + '</b><span class="small muted">' + esc(u.email) + '</span></div></div></td><td><span class="chip perfil-' + esc(u.perfil) + '">' + esc((C.PERFIS[u.perfil] || {}).nome || u.perfil) + '</span></td><td class="esconde-mob">' + meta + '</td><td class="esconde-mob">' + (u.recebe_leads === 'SIM' ? 'Sim' : 'Não') + '</td><td class="esconde-mob small muted">' + (u.ultimo_acesso ? C.fmtData(u.ultimo_acesso) : 'nunca') + '</td><td><span class="status ' + (u.ativo === 'SIM' ? 'st-on' : 'st-off') + '">' + (u.ativo === 'SIM' ? 'Ativo' : 'Bloqueado') + '</span></td></tr>';
+        }).join('') + '</tbody></table></div></div>' +
+        '<div class="aviso info" style="margin-top:16px">' + ic('info') + '<div><b>Como funciona a passagem de leads.</b> O lead novo cai para um SDR (em rodízio, se ligado em Ajustes > Regras). Quando o SDR qualifica, ele usa <b>Passar para closer</b> na conversa ou no contato, escolhe o closer (ou deixa no rodízio) e marca a reunião. O closer recebe a tarefa e o lead recebe um lembrete automático antes da reunião.</div></div>';
+      C.$('#eq-novo').onclick = function () { formPessoa({ perfil: 'sdr', recebe_leads: 'SIM' }); };
+      C.$$('[data-criar]', el).forEach(function (b) { b.onclick = function () { formPessoa({ perfil: b.dataset.criar, recebe_leads: b.dataset.criar === 'sdr' || b.dataset.criar === 'closer' ? 'SIM' : 'NAO' }); }; });
+      C.$$('tr[data-u]', el).forEach(function (tr) { tr.onclick = function () { formPessoa(C.usuario(tr.dataset.u)); }; });
+    }
+  };
+
+  function formPessoa(u) {
+    u = u || {};
+    var senhaSugerida = Math.random().toString(36).slice(2, 7) + '-' + Math.random().toString(36).slice(2, 7);
+    var el = C.modal({
+      titulo: u.id ? 'Editar conta' : 'Criar conta',
+      corpo: '<div class="grade2"><div class="campo"><label>Nome</label><input class="inp" id="u-nome" value="' + esc(u.nome || '') + '"></div><div class="campo"><label>E-mail (login)</label><input class="inp" type="email" id="u-email" value="' + esc(u.email || '') + '"></div></div>' +
+        '<div class="campo"><label>Perfil</label><div class="perfil-opcoes">' + ['sdr', 'closer', 'gestor', 'admin'].map(function (k) { return '<label class="perfil-op"><input type="radio" name="u-perfil" value="' + k + '"' + ((u.perfil === 'atendente' ? 'sdr' : u.perfil || 'sdr') === k ? ' checked' : '') + '><span><b>' + C.PERFIS[k].nome + '</b><small>' + C.PERFIS[k].desc + '</small></span></label>'; }).join('') + '</div></div>' +
+        '<div class="grade2"><div class="campo" id="u-meta-v"><label>Meta de vendas no mês (R$)</label><input class="inp" type="number" min="0" id="u-mv" value="' + esc(u.meta_valor || '') + '"></div><div class="campo" id="u-meta-r"><label>Meta de reuniões no mês</label><input class="inp" type="number" min="0" id="u-mr" value="' + esc(u.meta_reunioes || '') + '"></div></div>' +
+        '<div class="campo"><label>' + (u.id ? 'Nova senha (deixe em branco para manter)' : 'Senha inicial') + '</label><div class="linha"><input class="inp" type="text" id="u-senha" autocomplete="new-password" value="' + (u.id ? '' : senhaSugerida) + '"><button class="btn" id="u-gerar" style="flex:0 0 auto">' + ic('atualizar') + ' Gerar</button></div><span class="ajuda">Mínimo 8 caracteres. A pessoa pode trocar depois no menu com o nome dela.</span></div>' +
+        '<div class="grade2"><label class="check"><input type="checkbox" id="u-recebe"' + (u.recebe_leads === 'SIM' ? ' checked' : '') + '> Recebe leads no rodízio</label><label class="check"><input type="checkbox" id="u-ativo"' + (u.ativo !== 'NAO' ? ' checked' : '') + '> Acesso liberado</label></div>' +
+        '<div class="campo"><label>Cor do avatar</label><input type="color" class="inp-cor" id="u-cor" value="' + esc(u.cor || C.corDe(u.nome || 'x')) + '"></div>',
+      pe: '<button class="btn" data-fechar>Cancelar</button><button class="btn pri" id="u-ok" data-carregando=" Salvando...">' + (u.id ? 'Salvar' : 'Criar conta') + '</button>'
+    });
+    var perfilSel = function () { var r = el.querySelector('[name="u-perfil"]:checked'); return r ? r.value : 'sdr'; };
+    var metas = function () { var p = perfilSel(); el.querySelector('#u-meta-r').style.display = p === 'sdr' ? '' : 'none'; el.querySelector('#u-meta-v').style.display = p === 'sdr' ? 'none' : ''; };
+    C.$$('[name="u-perfil"]', el).forEach(function (r) { r.onchange = metas; });
+    metas();
+    el.querySelector('#u-gerar').onclick = function () { el.querySelector('#u-senha').value = Math.random().toString(36).slice(2, 7) + '-' + Math.random().toString(36).slice(2, 7); };
+    el.querySelector('#u-ok').onclick = function () {
+      var dados = { id: u.id, nome: el.querySelector('#u-nome').value, email: el.querySelector('#u-email').value, perfil: perfilSel(), senha: el.querySelector('#u-senha').value.trim(), recebe_leads: el.querySelector('#u-recebe').checked ? 'SIM' : 'NAO', ativo: el.querySelector('#u-ativo').checked ? 'SIM' : 'NAO', cor: el.querySelector('#u-cor').value, meta_valor: el.querySelector('#u-mv').value, meta_reunioes: el.querySelector('#u-mr').value };
+      C.comBotao(this, function () {
+        return C.api('usuario.salvar', { usuario: dados }).then(function () {
+          el.fechar();
+          if (dados.senha) {
+            var link = location.origin + location.pathname + (C.apiUrl() && C.apiUrl() !== 'demo' ? '?api=' + encodeURIComponent(C.apiUrl()) : '?demo=1');
+            var txt = 'Seu acesso ao ' + ((S.config.marca || {}).nome || 'CRM') + ':\nEndereço: ' + link + '\nE-mail: ' + dados.email.trim().toLowerCase() + '\nSenha: ' + dados.senha;
+            C.modal({ titulo: 'Conta pronta', corpo: '<p style="margin-top:0">Envie estes dados para a pessoa (por WhatsApp ou e-mail):</p><textarea class="inp" rows="5" readonly id="u-txt">' + esc(txt) + '</textarea>', pe: '<button class="btn" data-fechar>Fechar</button><button class="btn pri" id="u-cop">' + ic('copiar') + ' Copiar</button>' })
+              .querySelector('#u-cop').onclick = function () { C.copiar(txt); };
+          } else C.toast('Conta atualizada', 'ok');
+          return C.recarregar();
         });
-      };
+      });
     };
-    C.$('#eq-novo').onclick = function () { form(); };
-    C.$$('tr[data-u]', box).forEach(function (tr) { tr.onclick = function () { form(C.usuario(tr.dataset.u)); }; });
   }
-
   function ajSistema(box) {
     box.innerHTML = '<div class="grid-2" style="align-items:start"><div class="card card-pad"><h3 style="font-size:15px;margin-bottom:10px">Sobre este sistema</h3>' +
       '<div class="dado">Versão: <b>' + esc(CFGA.VERSAO) + '</b></div><div class="dado">Servidor:</div>' + (CFGA.URL_APP ? C.copiavel(CFGA.URL_APP) : '<p class="small muted">Modo demonstração</p>') +
@@ -450,8 +591,33 @@
       '<div class="card card-pad"><h3 style="font-size:15px;margin-bottom:10px">Manutenção</h3><p class="small muted" style="margin-top:0">Com o tempo a fila de envios e o registro das automações crescem. Limpar deixa o sistema mais rápido. Contatos, conversas e negócios não são apagados.</p>' +
       '<button class="btn" id="sy-limpa" data-carregando=" Limpando...">' + ic('lixo') + ' Limpar registros com mais de 90 dias</button>' +
       '<h3 style="font-size:15px;margin:20px 0 10px">Backup</h3><p class="small muted" style="margin-top:0">Exporte contatos em Contatos > Exportar e negócios em Relatórios. A cópia completa é feita na própria planilha (Arquivo > Fazer uma cópia).</p>' +
-      (C.ehDemo() ? '<button class="btn perigo" id="sy-reset">' + ic('atualizar') + ' Reiniciar dados da demonstração</button>' : '') + '</div></div>';
+      (C.ehDemo() ? '<button class="btn perigo" id="sy-reset">' + ic('atualizar') + ' Reiniciar dados da demonstração</button>' : '') + '</div></div>' +
+      '<div class="card card-pad" style="margin-top:16px" id="sy-arq"><div style="text-align:center;padding:20px"><span class="spin" style="color:var(--pri)"></span></div></div>';
     C.$('#sy-limpa').onclick = function () { var b = this; C.comBotao(b, function () { return C.api('historico.limpar', { dias: 90 }).then(function (r) { C.toast(r.fila + ' envios e ' + r.execucoes + ' execuções antigas removidos', 'ok'); }); }); };
     if (C.$('#sy-reset')) C.$('#sy-reset').onclick = function () { window.PrumoDemo.resetar(); };
+    C.api('arquivo.listar').then(function (r) { pintarArquivo(C.$('#sy-arq'), r); }).catch(function (e) { C.$('#sy-arq').innerHTML = '<p class="muted">' + esc(e.message) + '</p>'; });
+  }
+
+  function nomeMes(m) { var n = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']; return n[Number(m.slice(5, 7)) - 1] + ' ' + m.slice(0, 4); }
+  function mesAnterior(m) { var a = Number(m.slice(0, 4)), n = Number(m.slice(5, 7)) - 1; if (!n) { n = 12; a--; } return a + '-' + ('0' + n).slice(-2); }
+  function pintarArquivo(box, r) {
+    if (!box) return;
+    box.innerHTML = '<div class="card-cab" style="padding:0 0 10px;border:0"><h3 style="font-size:15px">' + ic('arquivo') + ' Arquivo mensal no Google Drive</h3></div>' +
+      '<p class="small muted" style="margin-top:0">Todo mês, as mensagens, o histórico, os envios e os negócios fechados do mês anterior vão para uma planilha própria no seu Google Drive (pasta <b>' + esc((S.config.marca || {}).nome || '') + ' - Arquivos</b>), com o nome do mês e do ano. A planilha principal fica leve, só com o mês atual, e nunca chega no limite do Google. Os dados antigos continuam aparecendo no sistema: nos relatórios e no botão <b>Ver meses anteriores</b> de cada conversa.</p>' +
+      '<label class="check"><input type="checkbox" id="ar-auto"' + (r.auto === 'SIM' ? ' checked' : '') + '> Arquivar sozinho na virada do mês (de madrugada)</label>' +
+      '<div class="dado small">Arquivado até: <b>' + (r.feito ? nomeMes(mesAnterior(r.feito)) : 'nenhum mês ainda') + '</b></div>' +
+      (r.arquivos.length ? '<div class="tabela-wrap" style="margin:10px 0"><table class="tab"><thead><tr><th>Mês</th><th>Linhas guardadas</th><th></th></tr></thead><tbody>' + r.arquivos.map(function (a) { return '<tr style="cursor:default"><td>' + nomeMes(a.mes) + '</td><td class="num">' + C.inteiro(C.num(a.linhas)) + '</td><td>' + (a.url ? '<a href="' + esc(a.url) + '" target="_blank" rel="noopener" class="btn peq">' + ic('externo') + ' Abrir planilha</a>' : '<span class="small muted">guardado no navegador (demonstração)</span>') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="small muted">Nenhum mês arquivado ainda.</p>') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="ar-ja" data-carregando=" Arquivando...">' + ic('arquivo') + ' Arquivar meses anteriores agora</button><button class="btn pri" id="ar-salvar" data-carregando=" Salvando...">Salvar</button></div>' +
+      '<p class="small muted">Arquivar agora pode levar alguns minutos e, enquanto isso, o sistema fica mais lento. Prefira fora do horário de atendimento.</p>';
+    box.querySelector('#ar-salvar').onclick = function () { var b = this; C.comBotao(b, function () { return salvarCfg({ ARQUIVO_AUTO: box.querySelector('#ar-auto').checked ? 'SIM' : 'NAO' }).then(function () { C.toast('Salvo', 'ok'); }); }); };
+    box.querySelector('#ar-ja').onclick = function () {
+      var b = this;
+      C.comBotao(b, function () {
+        return C.api('arquivo.arquivar').then(function (x) {
+          C.toast(x.total ? C.inteiro(x.total) + ' linhas movidas para o arquivo' + (x.parcial ? '. Clique de novo para continuar.' : '') : 'Nada para arquivar: só há dados do mês atual.', 'ok');
+          return C.api('arquivo.listar').then(function (r2) { pintarArquivo(box, r2); });
+        });
+      });
+    };
   }
 })();
