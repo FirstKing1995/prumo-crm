@@ -397,7 +397,7 @@
         '<div class="modal-corpo" style="flex:1">';
       if (aba === 'resumo') {
         h += '<div class="chips" style="margin-bottom:14px"><span class="status st-' + c.status + '">' + ({ lead: 'Lead', cliente: 'Cliente', inativo: 'Inativo' }[c.status] || '') + '</span>' + C.tags(c.tags).map(function (t) { return '<span class="chip">' + ic('tag') + esc(t) + '</span>'; }).join('') +
-          (c.optout === 'SIM' ? '<span class="status st-erro">Não recebe mensagens automáticas</span>' : '') + '</div>';
+          (c.optout === 'SIM' ? '<span class="status st-erro">Não recebe mensagens automáticas</span>' : '') + (c.email_optout === 'SIM' ? '<span class="status st-erro">Não recebe e-mails</span>' : '') + (c.ultima_visita ? '<span class="chip">' + ic('olho') + 'Visitou o site ' + C.rel(c.ultima_visita) + '</span>' : '') + '</div>';
         h += '<div class="grade2">' + [['empresa', 'predio', c.empresa], ['cidade', 'mapa', c.cidade], ['origem', 'bandeira', 'Origem: ' + (c.origem || '—')], ['resp', 'equipe', 'Responsável: ' + (u ? u.nome : 'ninguém')], ['sdr', 'passar', c.sdr_id && C.usuario(c.sdr_id) ? 'SDR: ' + C.usuario(c.sdr_id).nome : ''], ['pontos', 'estrela', C.num(c.pontos) ? 'Pontuação: ' + C.num(c.pontos) : ''], ['criado', 'calendario', 'Desde ' + C.fmtData(c.criado_em, false)], ['cargo', 'nota', c.cargo]]
           .filter(function (x) { return x[2]; }).map(function (x) { return '<div class="dado">' + ic(x[1]) + '<span class="trunc">' + esc(x[2]) + '</span></div>'; }).join('') + '</div>';
         if (campos.length) h += '<h4 class="rot" style="margin:16px 0 6px">Campos personalizados</h4><div class="grade2">' + campos.map(function (f) { return '<div class="dado"><span class="fraco">' + esc(f.rotulo) + ':</span> <span class="trunc">' + esc(cp[f.chave] || '—') + '</span></div>'; }).join('') + '</div>';
@@ -467,7 +467,7 @@
     carregar();
   };
   function rotuloAcao(a) {
-    return { passado: 'Passado para closer', reuniao: 'Reunião', compra: 'Venda', comentario: 'Comentou no Instagram', integracao: 'Integração', arquivo: 'Arquivo mensal', contato_criado: 'Contato criado', contato_atualizado: 'Dados atualizados', tag: 'Tag', nota: 'Anotação', negocio_criado: 'Negócio criado', etapa: 'Mudou de etapa', tarefa: 'Tarefa criada', automacao: 'Automação', automacao_erro: 'Erro na automação', optout: 'Saiu da lista', atribuido: 'Atribuído', importacao: 'Importação' }[a] || a;
+    return { email_enviado: 'E-mail enviado', email_aberto: 'Abriu e-mail', email_clicou: 'Clicou no e-mail', email_descadastro: 'Saiu da lista de e-mails', visitou: 'Visitou o site', passado: 'Passado para closer', reuniao: 'Reunião', compra: 'Venda', comentario: 'Comentou no Instagram', integracao: 'Integração', arquivo: 'Arquivo mensal', contato_criado: 'Contato criado', contato_atualizado: 'Dados atualizados', tag: 'Tag', nota: 'Anotação', negocio_criado: 'Negócio criado', etapa: 'Mudou de etapa', tarefa: 'Tarefa criada', automacao: 'Automação', automacao_erro: 'Erro na automação', optout: 'Saiu da lista', atribuido: 'Atribuído', importacao: 'Importação' }[a] || a;
   }
 
   /* ============================================================= NEGÓCIOS */

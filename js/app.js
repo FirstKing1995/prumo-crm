@@ -16,6 +16,7 @@
     { sec: 'Marketing', perm: 'automacoes' },
     { id: 'automacoes', rot: 'Automações', ic: 'automacoes', perm: 'automacoes' },
     { id: 'disparos', rot: 'Disparos', ic: 'disparos', perm: 'disparos' },
+    { id: 'email', rot: 'E-mail marketing', ic: 'email', perm: 'disparos' },
     { id: 'grupos', rot: 'Grupos e links', ic: 'grupos', perm: 'disparos' },
     { sec: 'Gestão', perm: 'relatorios' },
     { id: 'relatorios', rot: 'Relatórios', ic: 'relatorios', perm: 'relatorios' },
@@ -95,7 +96,7 @@
   C.aplicarDados = function (d) {
     S.user = d.usuario; S.perm = d.permissoes || {}; S.config = d.config || {};
     S.usuarios = d.usuarios || []; S.funis = d.funis || []; S.contatos = d.contatos || []; S.negocios = d.negocios || [];
-    S.tarefas = d.tarefas || []; S.modelos = d.modelos || []; S.automacoes = d.automacoes || []; S.campanhas = d.campanhas || [];
+    S.tarefas = d.tarefas || []; S.modelos = d.modelos || []; S.automacoes = d.automacoes || []; S.campanhas = d.campanhas || []; S.emails = d.emails || [];
     S.grupos = d.grupos || []; S.ultimaSync = d.agora; S.carregado = true;
     C.aplicarMarca(S.config.marca);
   };
@@ -111,7 +112,14 @@
       S.view = permitido(salva) ? salva : 'painel';
       renderShell();
       iniciarSync();
+      registrarSite();
     });
+  }
+
+  function registrarSite() {
+    if (!C.pode('ajustes') || C.ehDemo() || location.protocol !== 'https:') return;
+    var url = location.origin + location.pathname.replace(/[^/]*$/, '');
+    if (S.config.site_url !== url) C.api('site.registrar', { url: url }).then(function () { S.config.site_url = url; }).catch(function () { });
   }
 
   function permitido(v) {
@@ -349,8 +357,10 @@
         else { S.contatos.push(c); mudou = true; }
       });
       if (r.campanhas) r.campanhas.forEach(function (c) { var i = S.campanhas.findIndex(function (x) { return x.id === c.id; }); if (i >= 0) S.campanhas[i] = c; });
+      var mudouEmail = false;
+      if (r.emails) r.emails.forEach(function (e) { var i = (S.emails || []).findIndex(function (x) { return x.id === e.id; }); if (i >= 0 && JSON.stringify(S.emails[i]) !== JSON.stringify(e)) { S.emails[i] = e; mudouEmail = true; } });
       if (mudou) renderNav();
-      if (v && v.aoSincronizar) v.aoSincronizar({ contatosMudaram: mudou, mensagens: r.mensagens || [], campanhas: r.campanhas });
+      if (v && v.aoSincronizar) v.aoSincronizar({ contatosMudaram: mudou, mensagens: r.mensagens || [], campanhas: r.campanhas, emails: S.view === 'email' && mudouEmail ? r.emails : null });
     }).catch(function () { }).then(function () { C.syncOcupado = false; });
   }
   C.syncAgora = sync;

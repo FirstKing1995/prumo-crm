@@ -7,13 +7,13 @@
    Tudo o que depende do lugar (ler/gravar dados, chamar URLs, cache, hora)
    chega pelo objeto P ("plataforma"). Nada aqui conhece planilha ou navegador.
    ========================================================================== */
-var PRUMO_VERSAO = '1.1.0';
+var PRUMO_VERSAO = '1.2.0';
 
 var PRUMO_ESQUEMA = {
   Usuarios: ['id', 'nome', 'email', 'senha_hash', 'salt', 'perfil', 'ativo', 'recebe_leads', 'cor', 'ultimo_acesso', 'criado_em', 'meta_valor', 'meta_reunioes'],
   Contatos: ['id', 'nome', 'telefone', 'email', 'empresa', 'cargo', 'cidade', 'origem', 'tags', 'responsavel_id', 'status', 'campos', 'notas',
     'optout', 'bot_pausado_ate', 'ultima_msg', 'ultima_msg_em', 'ultima_direcao', 'nao_lidas', 'total_msgs', 'criado_em', 'atualizado_em',
-    'canal', 'ig_id', 'ig_usuario', 'janela_ate', 'gratis_ate', 'sdr_id', 'pontos'],
+    'canal', 'ig_id', 'ig_usuario', 'janela_ate', 'gratis_ate', 'sdr_id', 'pontos', 'email_optout', 'ultima_visita'],
   Funis: ['id', 'nome', 'ordem'],
   Etapas: ['id', 'funil_id', 'nome', 'cor', 'ordem', 'tipo'],
   Negocios: ['id', 'titulo', 'contato_id', 'funil_id', 'etapa_id', 'valor', 'responsavel_id', 'status', 'motivo_perda', 'previsao', 'notas',
@@ -25,9 +25,11 @@ var PRUMO_ESQUEMA = {
   Execucoes: ['id', 'automacao_id', 'contato_id', 'passo_id', 'status', 'acordar_em', 'tentativas', 'criado_em', 'atualizado_em', 'dados'],
   Campanhas: ['id', 'nome', 'destino', 'filtro', 'grupos', 'texto', 'midia_url', 'midia_tipo', 'meta_modelo', 'velocidade', 'status',
     'agendar_em', 'total', 'enviados', 'erros', 'respostas', 'criado_por', 'criado_em', 'iniciada_em', 'concluida_em', 'economia'],
-  Fila: ['id', 'tipo', 'ref_id', 'contato_id', 'destino', 'texto', 'midia_url', 'midia_tipo', 'enviar_em', 'status', 'erro', 'criado_em', 'enviado_em'],
+  Fila: ['id', 'tipo', 'ref_id', 'contato_id', 'destino', 'texto', 'midia_url', 'midia_tipo', 'enviar_em', 'status', 'erro', 'criado_em', 'enviado_em', 'variante', 'aberto_em', 'clicado_em'],
+  Emails: ['id', 'nome', 'tipo', 'assunto', 'assunto_b', 'preheader', 'blocos', 'filtro', 'status', 'total', 'enviados', 'aberturas', 'cliques', 'descadastros', 'erros',
+    'agendar_em', 'criado_por', 'criado_em', 'iniciada_em', 'concluida_em', 'aberturas_b', 'enviados_b'],
   Grupos: ['id', 'nome', 'jid', 'link', 'slug', 'limite', 'cliques', 'ordem', 'ativo', 'criado_em'],
-  Historico: ['id', 'data', 'contato_id', 'negocio_id', 'usuario_nome', 'acao', 'detalhe'],
+  Historico: ['id', 'data', 'contato_id', 'negocio_id', 'usuario_nome', 'acao', 'detalhe', 'ref_id'],
   Arquivos: ['id', 'mes', 'planilha_id', 'url', 'linhas', 'criado_em', 'atualizado_em'],
   Config: ['chave', 'valor']
 };
@@ -88,6 +90,13 @@ var PRUMO_CONFIG_PADRAO = {
   // ActiveCampaign
   AC_URL: '', AC_TOKEN: '', AC_LISTA: '',
   API_CHAVE: '',                // chave da API para outros sistemas (secreta)
+  // E-mail marketing: Gmail da própria conta (grátis) e Brevo (plano grátis) para somar volume
+  EMAIL_PROVEDOR: 'gmail',      // gmail | brevo | ambos (Gmail primeiro, depois Brevo)
+  EMAIL_NOME: '', EMAIL_RESPONDER: '', EMAIL_RODAPE: '',
+  EMAIL_LIMITE_GMAIL: '95', BREVO_APIKEY: '', BREVO_REMETENTE: '', BREVO_LIMITE: '295',
+  EMAIL_CONTAGEM: '',           // AAAA-MM-DD|gmail|brevo (enviados hoje)
+  SITE_URL: '',                 // endereço do site do sistema (GitHub Pages), usado nos links rastreados
+  RASTREIO_SEGREDO: '',
   // Arquivo mensal no Google Drive
   ARQUIVO_AUTO: 'SIM', ARQUIVO_FEITO: '', ARQUIVO_PASTA: '',
   PROX_TRABALHO: ''
@@ -163,11 +172,11 @@ function PrumoLogica(P) {
   }
 
   /* ====================================================== histórico/log */
-  function hist(contatoId, negocioId, user, acao, detalhe) {
+  function hist(contatoId, negocioId, user, acao, detalhe, ref) {
     try {
       P.inserir('Historico', {
         id: P.id('H'), data: P.agora(), contato_id: contatoId || '', negocio_id: negocioId || '',
-        usuario_nome: user ? user.nome : 'Sistema', acao: acao, detalhe: U.cap(detalhe, 500)
+        usuario_nome: user ? user.nome : 'Sistema', acao: acao, detalhe: U.cap(detalhe, 500), ref_id: ref || ''
       });
     } catch (e) { /* o histórico nunca derruba a operação principal */ }
   }
@@ -382,14 +391,14 @@ function PrumoLogica(P) {
   WA.urlWebhook = function () { return P.urlApp() + '?src=wa&k=' + encodeURIComponent(cfg().WEBHOOK_CHAVE); };
   WA.base = function (u) { return U.str(u).trim().replace(/\/+$/, ''); };
 
-  function req(url, metodo, corpo, cab) {
+  function req(url, metodo, corpo, cab, servico) {
     var r = P.http(url, { method: metodo || 'get', headers: cab || {}, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
     var dados = U.json(r.text, null);
     if (r.code >= 300) {
       var msg = dados && (dados.message || dados.error || (dados.response && dados.response.message) || (dados.error && dados.error.message));
       if (Array.isArray(msg)) msg = msg.join('; ');
       if (msg && typeof msg === 'object') msg = JSON.stringify(msg);
-      throw new Error('WhatsApp (' + r.code + '): ' + U.cap(msg || r.text || 'sem resposta', 220));
+      throw new Error((servico || 'WhatsApp') + ' (' + r.code + '): ' + U.cap(msg || r.text || 'sem resposta', 220));
     }
     return dados;
   }
@@ -838,6 +847,10 @@ function PrumoLogica(P) {
         ok = pal.some(function (p) { return g.modo === 'exata' ? t === p : (p && t.indexOf(p) >= 0); });
         if (!pal.length && (g.qualquer || tipo === 'comentario')) ok = !!t;
         if (ok && tipo === 'comentario' && g.post) ok = U.str(g.post).trim() === info.post;
+      } else if (tipo === 'email_aberto' || tipo === 'email_clicou') {
+        ok = (!g.email_id || g.email_id === info.email_id) && (!g.link || U.norm(info.url).indexOf(U.norm(g.link)) >= 0);
+      } else if (tipo === 'visitou') {
+        ok = !g.url || U.norm(info.url).indexOf(U.norm(g.url)) >= 0;
       } else if (tipo === 'evento') {
         ok = g.evento === info.evento && (!g.produto || U.norm(info.produto).indexOf(U.norm(g.produto)) >= 0);
       } else if (tipo === 'tag') ok = U.norm(g.tag) === U.norm(info.tag);
@@ -896,6 +909,11 @@ function PrumoLogica(P) {
       var neg = P.tabela('Negocios').filter(function (n) { return n.contato_id === c.id && n.status === 'aberto'; });
       var esta = neg.some(function (n) { return n.etapa_id === s.valor; });
       return s.op === 'nao_tem' ? !esta : esta;
+    }
+    if (s.se === 'email') {
+      var acao = s.op === 'clicou' || s.op === 'nao_clicou' ? 'email_clicou' : 'email_aberto';
+      var fez = P.filtrar('Historico', 'contato_id', c.id).some(function (h) { return h.acao === acao && (!s.valor || h.ref_id === s.valor); });
+      return s.op === 'nao_abriu' || s.op === 'nao_clicou' ? !fez : fez;
     }
     if (s.se === 'horario') {
       var hm = U.horaMin(P.agora());
@@ -968,6 +986,8 @@ function PrumoLogica(P) {
           if (dc.comentario_id && s.texto) IG.responderComentario(dc.comentario_id, montarTexto(s.texto, c));
         } else if (s.tipo === 'passar') {
           passarParaCloser(c, { closer_id: s.modo === 'usuario' ? s.usuario_id : '', nota: s.nota ? montarTexto(s.nota, c) : '' }, null);
+        } else if (s.tipo === 'email') {
+          enfileirarEmail(c, s.email_id);
         } else if (s.tipo === 'activecampaign') {
           INT.acSincronizar(c, U.lista(s.tags));
         } else if (s.tipo === 'atribuir') {
@@ -1335,7 +1355,7 @@ function PrumoLogica(P) {
     if (WA.temApi()) {
       var campanhas = {};
       P.tabela('Campanhas').forEach(function (c) { campanhas[c.id] = c; });
-      var pend = P.tabela('Fila').filter(function (f) { return f.status === 'pendente' && f.enviar_em <= agora; })
+      var pend = P.tabela('Fila').filter(function (f) { return f.status === 'pendente' && f.tipo !== 'email' && f.enviar_em <= agora; })
         .sort(function (a, b) { return a.enviar_em < b.enviar_em ? -1 : 1; });
       var podeAgora = dentroDoHorario(agora);
       for (var i = 0; i < pend.length && enviados + erros < maxEnvios; i++) {
@@ -1380,11 +1400,18 @@ function PrumoLogica(P) {
       });
     }
 
-    // 4) quando é o próximo trabalho?
+    // 4) e-mails (campanhas agendadas e fila)
+    P.tabela('Emails').filter(function (e) { return e.status === 'agendada' && e.agendar_em && e.agendar_em <= agora; })
+      .forEach(function (e) { try { iniciarEmail(e); } catch (er) { P.atualizar('Emails', e.id, { status: 'erro' }); } });
+    var re = trabalharEmails(agora, 25);
+    enviados += re.enviados; erros += re.erros;
+
+    // 5) quando é o próximo trabalho?
     var futuros = [];
     P.tabela('Fila').forEach(function (f) { if (f.status === 'pendente') futuros.push(f.enviar_em); });
     P.tabela('Execucoes').forEach(function (e) { if ((e.status === 'esperando_tempo' || e.status === 'esperando_resposta') && e.acordar_em) futuros.push(e.acordar_em); });
     P.tabela('Campanhas').forEach(function (c) { if (c.status === 'agendada' && c.agendar_em) futuros.push(c.agendar_em); });
+    P.tabela('Emails').forEach(function (e) { if (e.status === 'agendada' && e.agendar_em) futuros.push(e.agendar_em); });
     futuros.sort();
     var proxNovo = futuros[0] || '9999-12-31T00:00:00';
     if (proxNovo < P.agora()) proxNovo = '';
@@ -1481,6 +1508,239 @@ function PrumoLogica(P) {
       if (a) iniciarAutomacao(a, r.contato, {});
     }
     return { ok: true, contato_id: r.contato.id, novo: r.novo };
+  }
+
+  /* ===================================================== e-mail marketing */
+  // Envio pelo Gmail da própria conta Google (grátis: ~100/dia em conta comum, 1.500 no Workspace)
+  // e, se configurado, pelo plano grátis do Brevo (300/dia). Aberturas, cliques, descadastro e
+  // visitas ao site são registrados pelo próprio servidor, com links assinados (não dá para forjar).
+  var EM = {};
+  EM.esc = function (s) { return U.str(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  EM.segredo = function () {
+    var s = cfg().RASTREIO_SEGREDO;
+    if (!s) { s = P.uuid().replace(/-/g, '') + P.uuid().replace(/-/g, ''); salvarCfg({ RASTREIO_SEGREDO: s }); }
+    return s;
+  };
+  EM.assinar = function (v) { return P.hash(String(v), EM.segredo()).slice(0, 16); };
+  EM.confere = function (v, s) { return !!v && !!s && EM.assinar(v) === s; };
+  EM.pcid = function (c) { return c.id + '.' + EM.assinar('c' + c.id); };
+  EM.dePcid = function (pc) { var m = U.str(pc).split('.'); return m.length === 2 && m[0] && EM.assinar('c' + m[0]) === m[1] ? contatoPorId(m[0]) : null; };
+  EM.podeReceber = function (c) { return !!c && U.emailOk(c.email) && c.email_optout !== 'SIM'; };
+
+  /** Monta o e-mail para um contato. opc.fila_id liga o rastreio; sem ele (prévia/teste) os links ficam diretos. */
+  EM.montar = function (em, c, opc) {
+    opc = opc || {};
+    c = c || {};
+    var k = cfg(), cor = /^#[0-9a-f]{6}$/i.test(k.COR_PRIMARIA) ? k.COR_PRIMARIA : '#1F6FEB';
+    var fid = opc.fila_id || '', base = P.urlApp(), sig = fid ? EM.assinar(fid) : '';
+    var link = function (url) {
+      url = U.str(url).trim();
+      if (!/^https?:\/\//i.test(url) || !fid) return url;
+      if (k.SITE_URL) return k.SITE_URL.replace(/\/?$/, '/') + 'r.html?f=' + fid + '&s=' + sig + '&a=' + encodeURIComponent(base) + '&u=' + encodeURIComponent(url);
+      return base + '?t=c&f=' + fid + '&s=' + sig + '&u=' + encodeURIComponent(url);
+    };
+    var txt = function (t) {
+      return EM.esc(montarTexto(t, c)).replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
+        .replace(/(https?:\/\/[^\s<]+)/g, function (u) { return '<a href="' + EM.esc(link(u.replace(/&amp;/g, '&'))) + '" style="color:' + cor + '">' + u + '</a>'; })
+        .replace(/\n/g, '<br>');
+    };
+    var corpo = '', plano = [];
+    (U.json(em.blocos, []) || []).forEach(function (b) {
+      if (!b || !b.tipo) return;
+      if (b.tipo === 'titulo') { corpo += '<h1 style="margin:0 0 16px;font-size:24px;line-height:1.3;color:#111827;font-weight:700">' + txt(b.texto) + '</h1>'; plano.push(montarTexto(b.texto, c)); }
+      else if (b.tipo === 'texto') { corpo += '<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#374151">' + txt(b.texto) + '</p>'; plano.push(montarTexto(b.texto, c)); }
+      else if (b.tipo === 'botao' && b.url) {
+        corpo += '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 20px"><tr><td style="background:' + cor + ';border-radius:8px"><a href="' + EM.esc(link(montarTexto(b.url, c))) + '" style="display:inline-block;padding:14px 26px;color:#ffffff;font-weight:700;font-size:16px;text-decoration:none">' + EM.esc(montarTexto(b.texto || 'Saiba mais', c)) + '</a></td></tr></table>';
+        plano.push(montarTexto(b.texto || 'Saiba mais', c) + ': ' + montarTexto(b.url, c));
+      } else if (b.tipo === 'imagem' && /^https:\/\//i.test(U.str(b.url))) {
+        var img = '<img src="' + EM.esc(b.url) + '" alt="' + EM.esc(b.alt || '') + '" width="536" style="width:100%;max-width:536px;height:auto;border:0;border-radius:8px;display:block">';
+        corpo += '<div style="margin:0 0 16px">' + (b.link ? '<a href="' + EM.esc(link(b.link)) + '">' + img + '</a>' : img) + '</div>';
+      } else if (b.tipo === 'divisor') corpo += '<hr style="border:0;border-top:1px solid #E5E7EB;margin:24px 0">';
+      else if (b.tipo === 'espaco') corpo += '<div style="height:24px;line-height:24px">&nbsp;</div>';
+    });
+    var sair = fid ? base + '?t=sair&f=' + fid + '&s=' + sig : '#';
+    var logo = /^https:\/\//i.test(U.str(k.LOGO_URL)) ? '<img src="' + EM.esc(k.LOGO_URL) + '" alt="' + EM.esc(k.NOME) + '" height="40" style="height:40px;border:0;display:block">' : '<span style="font-size:20px;font-weight:800;color:' + cor + '">' + EM.esc(k.NOME) + '</span>';
+    var assunto = montarTexto(opc.variante === 'B' && em.assunto_b ? em.assunto_b : em.assunto, c);
+    var html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + EM.esc(assunto) + '</title></head>' +
+      '<body style="margin:0;padding:0;background:#F3F4F6;font-family:Arial,Helvetica,sans-serif">' +
+      (em.preheader ? '<div style="display:none;max-height:0;overflow:hidden;opacity:0">' + EM.esc(montarTexto(em.preheader, c)) + '</div>' : '') +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F4F6"><tr><td align="center" style="padding:24px 12px">' +
+      '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px">' +
+      '<tr><td style="padding:0 8px 16px">' + logo + '</td></tr>' +
+      '<tr><td style="background:#ffffff;border-radius:12px;padding:32px">' + corpo + '</td></tr>' +
+      '<tr><td style="padding:20px 8px;font-size:12px;line-height:1.5;color:#6B7280;text-align:center">' + (k.EMAIL_RODAPE ? EM.esc(k.EMAIL_RODAPE) + '<br>' : '') +
+      'Você recebe estes e-mails porque se cadastrou com a ' + EM.esc(k.NOME) + '. <a href="' + EM.esc(sair) + '" style="color:#6B7280">Não quero mais receber</a></td></tr>' +
+      '</table></td></tr></table>' +
+      (fid ? '<img src="' + EM.esc(base + '?t=o&f=' + fid + '&s=' + sig) + '" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">' : '') +
+      '</body></html>';
+    var texto = plano.join('\n\n') + '\n\n--\n' + (k.EMAIL_RODAPE ? k.EMAIL_RODAPE + '\n' : '') + 'Para não receber mais: ' + sair;
+    return { assunto: assunto, html: html, texto: texto, descadastro: sair };
+  };
+
+  /** Quantos e-mails já saíram hoje por provedor. */
+  EM.contagem = function () {
+    var h = P.agora().slice(0, 10), x = U.str(cfg().EMAIL_CONTAGEM).split('|');
+    return x[0] === h ? { dia: h, gmail: U.num(x[1]), brevo: U.num(x[2]) } : { dia: h, gmail: 0, brevo: 0 };
+  };
+  EM.cota = function (n) {
+    var k = cfg(), prov = k.EMAIL_PROVEDOR || 'gmail';
+    n = n || EM.contagem();
+    var g = prov === 'brevo' ? 0 : Math.max(0, U.num(k.EMAIL_LIMITE_GMAIL) - n.gmail);
+    if (g && P.email && P.email.cotaGmail) { try { g = Math.min(g, P.email.cotaGmail()); } catch (e) { /* segue com o limite configurado */ } }
+    var b = prov === 'gmail' || !k.BREVO_APIKEY || !k.BREVO_REMETENTE ? 0 : Math.max(0, U.num(k.BREVO_LIMITE) - n.brevo);
+    var porDia = (prov === 'brevo' ? 0 : U.num(k.EMAIL_LIMITE_GMAIL)) + (prov === 'gmail' || !k.BREVO_APIKEY ? 0 : U.num(k.BREVO_LIMITE));
+    return { gmail: g, brevo: b, total: g + b, enviados_hoje: n.gmail + n.brevo, por_dia: porDia, provedor: prov };
+  };
+  /** Envia um e-mail pelo provedor com saldo. n = contagem do dia (o chamador grava no fim). */
+  EM.enviar = function (m, n) {
+    var k = cfg(), q = EM.cota(n);
+    if (q.gmail > 0) {
+      if (!P.email || !P.email.gmail) throw new Error('Envio pelo Gmail indisponível aqui.');
+      P.email.gmail({ para: m.para, assunto: m.assunto, html: m.html, texto: m.texto, nome: k.EMAIL_NOME || k.NOME, responder: k.EMAIL_RESPONDER });
+      n.gmail++;
+      return 'gmail';
+    }
+    if (q.brevo > 0) {
+      var corpo = { sender: { name: k.EMAIL_NOME || k.NOME, email: k.BREVO_REMETENTE }, to: [{ email: m.para, name: m.nome || undefined }], subject: m.assunto, htmlContent: m.html, textContent: m.texto };
+      if (k.EMAIL_RESPONDER) corpo.replyTo = { email: k.EMAIL_RESPONDER };
+      if (m.descadastro && m.descadastro !== '#') corpo.headers = { 'List-Unsubscribe': '<' + m.descadastro + '>' };
+      req('https://api.brevo.com/v3/smtp/email', 'post', corpo, { 'api-key': k.BREVO_APIKEY, accept: 'application/json' }, 'Brevo');
+      n.brevo++;
+      return 'brevo';
+    }
+    throw new Error('LIMITE_DIA');
+  };
+
+  function publicoEmail(e) { return filtrarContatos(U.json(e.filtro, {}) || {}).filter(EM.podeReceber); }
+  function iniciarEmail(e) {
+    var alvo = publicoEmail(e);
+    if (!alvo.length) throw new Error('Nenhum contato com e-mail válido (e sem descadastro) neste público.');
+    var inicio = e.agendar_em && e.agendar_em > P.agora() ? e.agendar_em : P.agora();
+    var linhas = alvo.map(function (c, i) {
+      return { id: P.id('F') + i, tipo: 'email', ref_id: e.id, contato_id: c.id, destino: c.email, texto: '', midia_url: '', midia_tipo: '', enviar_em: inicio, status: 'pendente', erro: '', criado_em: P.agora(), enviado_em: '', variante: e.assunto_b && i % 2 ? 'B' : 'A', aberto_em: '', clicado_em: '' };
+    });
+    P.inserirVarios('Fila', linhas);
+    P.atualizar('Emails', e.id, { status: 'enviando', total: String(linhas.length), enviados: '0', enviados_b: '0', erros: '0', iniciada_em: P.agora() });
+    marcarTrabalho(inicio);
+    var q = EM.cota();
+    return { total: linhas.length, por_dia: q.por_dia, dias: q.por_dia ? Math.ceil(Math.max(0, linhas.length - q.total) / q.por_dia) + 1 : 0 };
+  }
+  /** Passo de automação "Enviar e-mail": entra na fila e sai na próxima rodada (respeita o limite do dia). */
+  function enfileirarEmail(c, emailId) {
+    var em = P.tabela('Emails').filter(function (x) { return x.id === emailId; })[0];
+    if (!em) throw new Error('E-mail da automação não encontrado.');
+    if (!EM.podeReceber(c)) { hist(c.id, '', null, 'automacao_erro', 'E-mail não enviado: contato sem e-mail válido ou descadastrado'); return; }
+    P.inserir('Fila', { id: P.id('F'), tipo: 'email', ref_id: em.id, contato_id: c.id, destino: c.email, texto: '', midia_url: '', midia_tipo: '', enviar_em: P.agora(), status: 'pendente', erro: '', criado_em: P.agora(), enviado_em: '', variante: 'A', aberto_em: '', clicado_em: '' });
+    P.atualizar('Emails', em.id, { total: String(U.num(em.total) + 1) });
+    marcarTrabalho(P.agora());
+  }
+  /** Parte do trabalho de 1 minuto: envia e-mails da fila até o limite do dia. */
+  function trabalharEmails(agora, max) {
+    var pend = P.tabela('Fila').filter(function (f) { return f.tipo === 'email' && f.status === 'pendente' && f.enviar_em <= agora; })
+      .sort(function (a, b) { return a.enviar_em < b.enviar_em ? -1 : 1; });
+    if (!pend.length) return { enviados: 0, erros: 0 };
+    var ems = {};
+    P.tabela('Emails').forEach(function (e) { ems[e.id] = e; });
+    var n = EM.contagem(), enviados = 0, erros = 0, mudE = {}, sem = false;
+    var marca = function (em, k, v) { mudE[em.id] = mudE[em.id] || {}; em[k] = String(U.num(em[k]) + v); mudE[em.id][k] = em[k]; };
+    for (var i = 0; i < pend.length && enviados + erros < (max || 25); i++) {
+      var f = pend[i], em = ems[f.ref_id];
+      if (!em || em.status === 'cancelada') { P.atualizar('Fila', f.id, { status: 'cancelado' }); continue; }
+      if (em.tipo !== 'automacao' && em.status !== 'enviando') continue;
+      var c = contatoPorId(f.contato_id);
+      if (!EM.podeReceber(c)) { P.atualizar('Fila', f.id, { status: 'cancelado', erro: 'Sem e-mail ou descadastrado' }); continue; }
+      try {
+        var r = EM.montar(em, c, { fila_id: f.id, variante: f.variante });
+        EM.enviar({ para: c.email, nome: c.nome, assunto: r.assunto, html: r.html, texto: r.texto, descadastro: r.descadastro }, n);
+        P.atualizar('Fila', f.id, { status: 'enviado', enviado_em: P.agora() });
+        marca(em, 'enviados', 1);
+        if (f.variante === 'B') marca(em, 'enviados_b', 1);
+        hist(c.id, '', null, 'email_enviado', r.assunto, em.id);
+        enviados++;
+      } catch (e) {
+        if (e.message === 'LIMITE_DIA') { sem = true; break; }
+        P.atualizar('Fila', f.id, { status: 'erro', erro: U.cap(e.message, 300), enviado_em: P.agora() });
+        marca(em, 'erros', 1);
+        erros++;
+      }
+    }
+    if (sem) { // acabou o limite de hoje: o resto sai amanhã às 8h
+      var amanha = U.somaTempo(agora.slice(0, 10) + 'T08:00:00', 1440), adiar = {};
+      pend.forEach(function (f) { if (f.status === 'pendente') adiar[f.id] = { enviar_em: amanha }; });
+      P.atualizarVarios('Fila', adiar);
+    }
+    Object.keys(ems).forEach(function (id) {
+      var e = ems[id];
+      if (e.tipo !== 'automacao' && e.status === 'enviando' && U.num(e.total) > 0 && U.num(e.enviados) + U.num(e.erros) >= U.num(e.total)) { mudE[id] = mudE[id] || {}; mudE[id].status = 'concluida'; mudE[id].concluida_em = P.agora(); }
+    });
+    P.atualizarVarios('Emails', mudE);
+    if (enviados) salvarCfg({ EMAIL_CONTAGEM: n.dia + '|' + n.gmail + '|' + n.brevo });
+    return { enviados: enviados, erros: erros, limite: sem };
+  }
+
+  function filaPorId(id) { return id ? P.filtrar('Fila', 'id', id)[0] || null : null; }
+  function emailDaFila(f) { return P.tabela('Emails').filter(function (e) { return e.id === f.ref_id; })[0] || null; }
+  EM.abriu = function (fid, s) {
+    if (!EM.confere(fid, s)) return false;
+    var f = filaPorId(fid);
+    if (!f || f.tipo !== 'email' || f.aberto_em) return false;
+    P.atualizar('Fila', f.id, { aberto_em: P.agora() });
+    var em = emailDaFila(f);
+    if (em) { var m = { aberturas: String(U.num(em.aberturas) + 1) }; if (f.variante === 'B') m.aberturas_b = String(U.num(em.aberturas_b) + 1); P.atualizar('Emails', em.id, m); }
+    var c = contatoPorId(f.contato_id);
+    if (c) { hist(c.id, '', null, 'email_aberto', em ? em.assunto : '', f.ref_id); gatilho('email_aberto', c, { email_id: f.ref_id }); }
+    return true;
+  };
+  EM.clicou = function (fid, s, url) {
+    if (!EM.confere(fid, s)) return null;
+    var f = filaPorId(fid);
+    if (!f || f.tipo !== 'email') return null;
+    if (!f.aberto_em) { EM.abriu(fid, s); f = filaPorId(fid); } // imagens bloqueadas: o clique prova a abertura
+    var em = emailDaFila(f);
+    if (!f.clicado_em) { P.atualizar('Fila', f.id, { clicado_em: P.agora() }); if (em) P.atualizar('Emails', em.id, { cliques: String(U.num(em.cliques) + 1) }); }
+    var c = contatoPorId(f.contato_id);
+    if (!c) return { pcid: '' };
+    hist(c.id, '', null, 'email_clicou', U.cap(url, 300), f.ref_id);
+    gatilho('email_clicou', c, { email_id: f.ref_id, url: url });
+    return { pcid: EM.pcid(c) };
+  };
+  EM.sair = function (fid, s) {
+    if (!EM.confere(fid, s)) throw new Error('Link inválido.');
+    var f = filaPorId(fid);
+    var c = f && contatoPorId(f.contato_id);
+    if (!c) return { ok: true };
+    if (c.email_optout !== 'SIM') {
+      P.atualizar('Contatos', c.id, { email_optout: 'SIM', atualizado_em: P.agora() });
+      hist(c.id, '', null, 'email_descadastro', 'Pediu para não receber mais e-mails', f.ref_id);
+      var em = emailDaFila(f);
+      if (em) P.atualizar('Emails', em.id, { descadastros: String(U.num(em.descadastros) + 1) });
+      var canc = {};
+      P.tabela('Fila').forEach(function (x) { if (x.tipo === 'email' && x.contato_id === c.id && x.status === 'pendente') canc[x.id] = { status: 'cancelado', erro: 'Descadastrado' }; });
+      P.atualizarVarios('Fila', canc);
+    }
+    return { ok: true, email: U.str(c.email).replace(/^(.).*(@.*)$/, '$1***$2') };
+  };
+  /** Visita a uma página do site de quem já clicou num e-mail (o script de rastreio manda o pcid). */
+  EM.visita = function (b) {
+    var ce = cfg().ENTRADA_CHAVE || cfg().WEBHOOK_CHAVE;
+    if (!b.k || b.k !== ce) throw new Error('Chave inválida.');
+    var c = EM.dePcid(b.pcid);
+    if (!c) return { ok: false };
+    var url = U.cap(U.str(b.url).split('#')[0], 300);
+    var chave = 'vis_' + c.id + '_' + EM.assinar(url);
+    if (P.cache.get(chave)) return { ok: true, repetida: true };
+    P.cache.put(chave, '1', 1800);
+    P.atualizar('Contatos', c.id, { ultima_visita: P.agora() });
+    hist(c.id, '', null, 'visitou', (b.titulo ? U.cap(b.titulo, 120) + ' - ' : '') + url);
+    gatilho('visitou', c, { url: url });
+    return { ok: true };
+  };
+  /** Entrada dos links de rastreio que chegam direto no servidor (?t=o abertura, ?t=c clique, ?t=sair). */
+  function receberRastreio(p) {
+    if (p.t === 'o') { EM.abriu(p.f, p.s); return { ok: true }; }
+    if (p.t === 'c') { var r = EM.clicou(p.f, p.s, p.u); return { ok: !!r, url: /^https?:\/\//i.test(U.str(p.u)) ? p.u : '' }; }
+    if (p.t === 'sair') return EM.sair(p.f, p.s);
+    throw new Error('Rastreio desconhecido.');
   }
 
   /* ===================================================== integrações */
@@ -1748,15 +2008,15 @@ function PrumoLogica(P) {
       campos: U.json(c.CAMPOS_PERSONALIZADOS, []) || [], tags: U.lista(c.TAGS), origens: U.lista(c.ORIGENS),
       horario: { inicio: c.HORARIO_INICIO, fim: c.HORARIO_FIM, dias: c.DIAS_ENVIO }, segmento: c.SEGMENTO,
       sla_minutos: U.num(c.SLA_MINUTOS), instagram: IG.ativo(), activecampaign: !!(c.AC_URL && c.AC_TOKEN), passar_etapa: c.PASSAR_ETAPA,
-      arquivo: !!P.arquivo
+      arquivo: !!P.arquivo, site_url: c.SITE_URL, email_provedor: c.EMAIL_PROVEDOR
     };
   }
   function configAdmin() {
     var c = cfg();
     var o = {};
     Object.keys(PRUMO_CONFIG_PADRAO).forEach(function (k) { o[k] = c[k]; });
-    ['EVOLUTION_APIKEY', 'WAHA_APIKEY', 'META_TOKEN', 'IG_TOKEN', 'AC_TOKEN'].forEach(function (k) { o[k] = c[k] ? '••••••••' + U.str(c[k]).slice(-4) : ''; });
-    delete o.API_CHAVE;
+    ['EVOLUTION_APIKEY', 'WAHA_APIKEY', 'META_TOKEN', 'IG_TOKEN', 'AC_TOKEN', 'BREVO_APIKEY'].forEach(function (k) { o[k] = c[k] ? '••••••••' + U.str(c[k]).slice(-4) : ''; });
+    delete o.API_CHAVE; delete o.RASTREIO_SEGREDO;
     o.URL_APP = P.urlApp();
     o.URL_WEBHOOK_WA = WA.urlWebhook();
     o.URL_WEBHOOK_ENTRADA = P.urlApp() + '?src=entrada&k=' + encodeURIComponent(c.ENTRADA_CHAVE || c.WEBHOOK_CHAVE);
@@ -1768,7 +2028,7 @@ function PrumoLogica(P) {
     return o;
   }
 
-  var CHAVES_EDITAVEIS = Object.keys(PRUMO_CONFIG_PADRAO).filter(function (k) { return ['PROX_TRABALHO', 'WEBHOOK_CHAVE', 'ENTRADA_CHAVE', 'API_CHAVE', 'VENDAS_CHAVE', 'ARQUIVO_FEITO', 'ARQUIVO_PASTA'].indexOf(k) < 0; });
+  var CHAVES_EDITAVEIS = Object.keys(PRUMO_CONFIG_PADRAO).filter(function (k) { return ['PROX_TRABALHO', 'WEBHOOK_CHAVE', 'ENTRADA_CHAVE', 'API_CHAVE', 'VENDAS_CHAVE', 'ARQUIVO_FEITO', 'ARQUIVO_PASTA', 'EMAIL_CONTAGEM', 'RASTREIO_SEGREDO', 'SITE_URL'].indexOf(k) < 0; });
 
   function bootstrap(user) {
     var contatos = filtraContatosDoUsuario(user, P.tabela('Contatos'));
@@ -1785,6 +2045,7 @@ function PrumoLogica(P) {
       modelos: P.tabela('Modelos'),
       automacoes: pode(user, 'automacoes') ? P.tabela('Automacoes') : [],
       campanhas: pode(user, 'disparos') ? P.tabela('Campanhas') : [],
+      emails: pode(user, 'disparos') || pode(user, 'automacoes') ? P.tabela('Emails') : [],
       grupos: P.tabela('Grupos')
     };
   }
@@ -1799,7 +2060,8 @@ function PrumoLogica(P) {
       var c = contatoPorId(b.contato_id);
       if (c && podeContato(u, c)) r.mensagens = P.filtrar('Mensagens', 'contato_id', c.id).filter(function (m) { return !desde || m.criado_em >= desde; });
     }
-    if (pode(u, 'disparos')) r.campanhas = P.tabela('Campanhas').filter(function (x) { return x.status === 'enviando' || x.status === 'agendada'; });
+    if (pode(u, 'disparos')) r.campanhas = P.tabela('Campanhas').filter(function (x) { return x.status === 'enviando' || x.status === 'agendada' || (desde && x.concluida_em >= desde); });
+    if (pode(u, 'disparos')) r.emails = P.tabela('Emails').filter(function (x) { return x.status === 'enviando' || x.status === 'agendada' || x.tipo === 'automacao' || (desde && x.concluida_em >= desde) || (x.status === 'concluida' && x.concluida_em >= U.somaTempo(P.agora(), -2 * 1440)); });
     return r;
   };
   R['logout'] = function (u, b) { P.cache.del('s_' + b.token); return true; };
@@ -1977,6 +2239,108 @@ function PrumoLogica(P) {
     r.com_economia = r.modelo * precoModelo + r.janela * U.num(k.META_PRECO_SERVICO);
     r.sem_economia = (r.modelo + r.janela + r.gratis) * precoModelo;
     return r;
+  };
+
+  // ---- e-mail marketing
+  function exigeEmail(id) { var e = P.tabela('Emails').filter(function (x) { return x.id === id; })[0]; if (!e) throw new Error('E-mail não encontrado.'); return e; }
+  function blocosLimpos(bl) {
+    return (Array.isArray(bl) ? bl : U.json(bl, []) || []).slice(0, 40).map(function (b) {
+      var o = { tipo: U.str(b.tipo) };
+      if (['titulo', 'texto', 'botao'].indexOf(o.tipo) >= 0) o.texto = U.cap(b.texto, 5000);
+      if (o.tipo === 'botao') o.url = U.cap(b.url, 1000);
+      if (o.tipo === 'imagem') { o.url = U.urlMidia(b.url); o.link = U.cap(b.link, 1000); o.alt = U.cap(b.alt, 120); }
+      return o;
+    }).filter(function (b) { return ['titulo', 'texto', 'botao', 'imagem', 'divisor', 'espaco'].indexOf(b.tipo) >= 0; });
+  }
+  R['email.salvar'] = function (u, b) {
+    var d = b.email || {};
+    exige(u, d.tipo === 'automacao' ? 'automacoes' : 'disparos');
+    if (!U.str(d.nome).trim()) throw new Error('Dê um nome para o e-mail.');
+    if (!U.str(d.assunto).trim()) throw new Error('Escreva o assunto.');
+    var reg = { nome: U.cap(d.nome, 100), tipo: d.tipo === 'automacao' ? 'automacao' : 'campanha', assunto: U.cap(d.assunto, 200), assunto_b: U.cap(d.assunto_b, 200), preheader: U.cap(d.preheader, 200),
+      blocos: JSON.stringify(blocosLimpos(d.blocos)), filtro: JSON.stringify(d.filtro || {}), agendar_em: d.agendar_em || '' };
+    if (d.id) {
+      var at = exigeEmail(d.id);
+      if (at.tipo !== 'automacao' && ['rascunho', 'agendada'].indexOf(at.status) < 0) throw new Error('Este e-mail já foi enviado e não pode ser editado. Use Duplicar.');
+      P.atualizar('Emails', d.id, reg);
+      return exigeEmail(d.id);
+    }
+    reg.id = P.id('EM'); reg.status = reg.tipo === 'automacao' ? 'ativo' : 'rascunho';
+    ['total', 'enviados', 'aberturas', 'cliques', 'descadastros', 'erros', 'aberturas_b', 'enviados_b'].forEach(function (k) { reg[k] = '0'; });
+    reg.criado_por = u.nome; reg.criado_em = P.agora();
+    P.inserir('Emails', reg);
+    return reg;
+  };
+  R['email.excluir'] = function (u, b) {
+    exige(u, 'disparos');
+    var e = exigeEmail(b.id);
+    if (e.status === 'enviando') throw new Error('Cancele o envio antes de excluir.');
+    if (P.tabela('Automacoes').some(function (a) { return (U.json(a.passos, []) || []).some(function (st) { return st.tipo === 'email' && st.email_id === e.id; }); })) throw new Error('Este e-mail é usado numa automação. Tire o passo da automação antes.');
+    P.excluirVarios('Fila', P.tabela('Fila').filter(function (f) { return f.ref_id === e.id && f.status === 'pendente'; }).map(function (f) { return f.id; }));
+    P.excluir('Emails', e.id);
+    return true;
+  };
+  R['email.duplicar'] = function (u, b) {
+    exige(u, 'disparos');
+    var e = exigeEmail(b.id), n = {};
+    Object.keys(e).forEach(function (k) { n[k] = e[k]; });
+    n.id = P.id('EM'); n.nome = U.cap(e.nome + ' (cópia)', 100); n.status = e.tipo === 'automacao' ? 'ativo' : 'rascunho'; n.agendar_em = ''; n.iniciada_em = ''; n.concluida_em = '';
+    ['total', 'enviados', 'aberturas', 'cliques', 'descadastros', 'erros', 'aberturas_b', 'enviados_b'].forEach(function (k) { n[k] = '0'; });
+    n.criado_por = u.nome; n.criado_em = P.agora();
+    P.inserir('Emails', n);
+    return n;
+  };
+  R['email.publico'] = function (u, b) { exige(u, 'disparos'); var t = publicoEmail({ filtro: b.filtro || {} }).length; return { total: t, cota: EM.cota() }; };
+  R['email.cota'] = function (u) { exige(u, 'disparos'); return EM.cota(); };
+  R['email.previa'] = function (u, b) {
+    var d = b.email || {};
+    var c = (b.contato_id && contatoPorId(b.contato_id)) || { nome: 'Maria Silva', email: 'maria@exemplo.com.br', primeiro_nome: 'Maria' };
+    var r = EM.montar({ assunto: d.assunto, assunto_b: d.assunto_b, preheader: d.preheader, blocos: JSON.stringify(blocosLimpos(d.blocos)) }, c, { variante: b.variante });
+    return { assunto: r.assunto, html: r.html };
+  };
+  R['email.testar'] = function (u, b) {
+    exige(u, 'disparos');
+    var para = U.str(b.para || u.email).trim().toLowerCase();
+    if (!U.emailOk(para)) throw new Error('Informe um e-mail válido para o teste.');
+    var d = b.email || {};
+    var r = EM.montar({ assunto: d.assunto, preheader: d.preheader, blocos: JSON.stringify(blocosLimpos(d.blocos)) }, { nome: u.nome, email: para });
+    var n = EM.contagem();
+    var via = EM.enviar({ para: para, nome: u.nome, assunto: '[Teste] ' + r.assunto, html: r.html, texto: r.texto }, n);
+    salvarCfg({ EMAIL_CONTAGEM: n.dia + '|' + n.gmail + '|' + n.brevo });
+    return { ok: true, via: via };
+  };
+  R['email.iniciar'] = function (u, b) {
+    exige(u, 'disparos');
+    var e = exigeEmail(b.id);
+    if (e.tipo === 'automacao') throw new Error('E-mails de automação saem pelo passo "Enviar e-mail" da automação.');
+    if (['rascunho', 'agendada'].indexOf(e.status) < 0) throw new Error('Este e-mail já foi iniciado.');
+    if (e.agendar_em && e.agendar_em > P.agora() && !b.agora) { P.atualizar('Emails', e.id, { status: 'agendada' }); marcarTrabalho(e.agendar_em); return { agendada: true, quando: e.agendar_em }; }
+    return iniciarEmail(e);
+  };
+  R['email.pausar'] = function (u, b) { exige(u, 'disparos'); P.atualizar('Emails', exigeEmail(b.id).id, { status: 'pausada' }); return true; };
+  R['email.retomar'] = function (u, b) { exige(u, 'disparos'); P.atualizar('Emails', exigeEmail(b.id).id, { status: 'enviando' }); marcarTrabalho(P.agora()); return true; };
+  R['email.cancelar'] = function (u, b) {
+    exige(u, 'disparos');
+    var e = exigeEmail(b.id), ids = {};
+    P.atualizar('Emails', e.id, { status: 'cancelada' });
+    P.tabela('Fila').forEach(function (f) { if (f.ref_id === e.id && f.status === 'pendente') ids[f.id] = { status: 'cancelado' }; });
+    P.atualizarVarios('Fila', ids);
+    return true;
+  };
+  R['email.envios'] = function (u, b) {
+    exige(u, 'disparos');
+    var cs = {};
+    P.tabela('Contatos').forEach(function (c) { cs[c.id] = c.nome; });
+    return P.tabela('Fila').filter(function (f) { return f.ref_id === b.id && f.tipo === 'email'; }).slice(-2000).map(function (f) {
+      return { nome: cs[f.contato_id] || '', email: f.destino, status: f.status, erro: f.erro, variante: f.variante, enviado_em: f.enviado_em, aberto_em: f.aberto_em, clicado_em: f.clicado_em };
+    });
+  };
+  R['site.registrar'] = function (u, b) {
+    exige(u, 'ajustes');
+    var url = U.str(b.url).trim();
+    if (!/^https:\/\/[^\s"'<>]+\/$/.test(url)) return { ok: false };
+    if (cfg().SITE_URL !== url) salvarCfg({ SITE_URL: url });
+    return { ok: true };
   };
 
   // ---- arquivo mensal
@@ -2380,6 +2744,7 @@ function PrumoLogica(P) {
     if (!cfg().WEBHOOK_CHAVE) salvarCfg({ WEBHOOK_CHAVE: P.uuid().replace(/-/g, '') });
     if (!cfg().ENTRADA_CHAVE) salvarCfg({ ENTRADA_CHAVE: P.uuid().replace(/-/g, '') });
     if (!cfg().VENDAS_CHAVE) salvarCfg({ VENDAS_CHAVE: P.uuid().replace(/-/g, '') });
+    if (!cfg().RASTREIO_SEGREDO) salvarCfg({ RASTREIO_SEGREDO: P.uuid().replace(/-/g, '') + P.uuid().replace(/-/g, '') });
     if (!cfg().ARQUIVO_FEITO && !P.tabela('Mensagens').length) salvarCfg({ ARQUIVO_FEITO: mesAtual() });
   }
 
@@ -2395,6 +2760,9 @@ function PrumoLogica(P) {
       P.atualizar('Grupos', g.id, { cliques: String(U.num(g.cliques) + 1) });
       return { link: g.link, nome: g.nome, marca: marca().nome };
     }
+    if (acao === 'publico.clique') { var rc = EM.clicou(b.f, b.s, b.u); return { ok: !!rc, pcid: rc ? rc.pcid : '' }; }
+    if (acao === 'publico.sair') return EM.sair(b.f, b.s);
+    if (acao === 'publico.visita') return EM.visita(b);
     if (acao === 'publico.form') { // formulário de captura simples (página pública)
       var ce = cfg().ENTRADA_CHAVE || cfg().WEBHOOK_CHAVE;
       if (!b.k || b.k !== ce) throw new Error('Formulário inválido.');
@@ -2418,7 +2786,7 @@ function PrumoLogica(P) {
   }
 
   return {
-    U: U, WA: WA, IG: IG, INT: INT, cfg: cfg, arquivar: arquivar, salvarCfg: salvarCfg, rotear: rotear, receberWebhook: receberWebhook, trabalhar: trabalhar,
+    U: U, WA: WA, IG: IG, INT: INT, EM: EM, cfg: cfg, arquivar: arquivar, receberRastreio: receberRastreio, salvarCfg: salvarCfg, rotear: rotear, receberWebhook: receberWebhook, trabalhar: trabalhar,
     semear: semear, receber: receber, montarTexto: montarTexto, filtrarContatos: filtrarContatos, versao: PRUMO_VERSAO
   };
 }
