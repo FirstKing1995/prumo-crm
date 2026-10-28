@@ -8,12 +8,14 @@ Sistema white label: cada empresa troca nome, logo e cores pelo próprio sistema
 
 | Área | Recursos |
 |---|---|
-| Equipe | Contas por papel (administrador, gestor, SDR, closer) criadas pelo administrador, metas do mês, passagem do lead do SDR para o closer com reunião e lembrete automático, prazo de resposta |
+| Equipe | Contas por papel (administrador, gestor, SDR, closer e personalizado, com atalhos para gestor de tráfego, marketing e financeiro), tarefas por pessoa criadas pelo administrador, metas do mês, passagem do lead do SDR para o closer com reunião e lembrete automático, prazo de resposta |
 | Conversas | Caixa de entrada do WhatsApp e do Instagram Direct para a equipe, janela de 24h da API oficial, respostas rápidas com `/atalho`, mídia por link, responsável por conversa, pausa do robô quando um humano responde |
 | Contatos | Tags, campos personalizados, origem, filtros, ações em massa, importação CSV com detecção de colunas, exportação, ficha com histórico |
 | Negócios | Vários funis, kanban com arrastar e soltar, ganho/perdido com motivo, negócios parados |
 | Tarefas | Prazos, atrasadas, tarefas criadas pelos robôs |
-| Automações | Gatilhos (primeira mensagem, palavra-chave, novo contato, webhook, tag, etapa, comentário no Instagram, evento de venda, manual) e 20 tipos de passo, incluindo menu com botões, formulário (WhatsApp Flows na API oficial), pontuação de lead, passar para closer, responder comentário e enviar ao ActiveCampaign. 11 modelos prontos |
+| Automações | Construtor visual em blocos ligados (como o ManyChat) ou em lista. Gatilhos (cobrança perto de vencer, cobrança atrasada, pagamento, reembolso, e-mail, visita ao site, primeira mensagem, palavra-chave, novo contato, webhook, tag, etapa, comentário no Instagram, evento de venda, manual) e 20 tipos de passo, incluindo menu com botões, formulário (WhatsApp Flows na API oficial), pontuação de lead, passar para closer, responder comentário e enviar ao ActiveCampaign. 11 modelos prontos |
+| Financeiro | Vendas parceladas, entradas reais do mês, valor a receber, inadimplentes com tag e automação de recuperação, lembrete de vencimento, reembolsos, links de pagamento do Mercado Pago com baixa automática, clientes ativos |
+| Chat do site | Código para o site com janela de conversa que pede nome e contato e cai na caixa de entrada |
 | E-mail marketing | Campanhas com editor por blocos e prévia, teste A/B de assunto, agendamento, e-mails de automação, aberturas e cliques, descadastro automático, rastreio de visitas ao site. Envio grátis pelo Gmail da conta (e Brevo grátis para somar volume) |
 | Disparos | Público por tags/etapas/status/origem/datas, spintax `{Oi\|Olá}`, mídia, agendamento, velocidade anti-bloqueio, horário comercial, descadastro automático (SAIR), envio assistido sem API, modelos da Meta |
 | Grupos | Importação dos grupos do WhatsApp, disparo para grupos, link inteligente que troca de grupo quando lota |
@@ -72,6 +74,9 @@ A página de vendas e o pagamento ficam fora deste projeto, na pasta `prumo-vend
 - [Economia na API oficial da Meta](docs/ECONOMIA_API_OFICIAL.md)
 - [Arquivo mensal](docs/ARQUIVO_MENSAL.md)
 - [E-mail marketing](docs/EMAIL_MARKETING.md)
+- [Financeiro e Mercado Pago](docs/FINANCEIRO.md)
+- [Chat do site](docs/CHAT_DO_SITE.md)
+- [Plano de suporte e atualizações](docs/SUPORTE_E_ATUALIZACOES.md)
 - [Análise de concorrentes e próximos passos](ANALISE_CONCORRENTES.md) (interno)
 
 ## Referências estudadas

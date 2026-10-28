@@ -38,17 +38,20 @@ fs.writeFileSync(path.join(pasta, 'LEIA-ME.txt'), [
   '  docs/               guias de instalação, WhatsApp e integrações.',
   '',
   'Comece por docs/INSTALACAO.md.',
+  'Seu plano de suporte e o que ele inclui: docs/SUPORTE_E_ATUALIZACOES.md.',
+  'Cole o código de suporte que veio na sua compra em Ajustes > Sistema > Plano de suporte.',
   '',
   'Para ver uma demonstração com dados de exemplo, abra o site com ?demo=1 no fim do endereço.',
   ''
 ].join('\r\n'));
 
 // 3) confere que nada pessoal ou de desenvolvimento foi junto
-const proibidos = /dhione|cambraia|gmail\.com|4blue|LINK_PAGAMENTO|mercado ?pago/i;
+const proibidos = /dhione|cambraia|gmail\.com|4blue|firstking/i;
 const varrer = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
   const p = path.join(d, e.name);
   if (e.isDirectory()) return varrer(p);
-  if (/\.(js|html|css|md|gs|txt|json|webmanifest)$/.test(e.name) && proibidos.test(fs.readFileSync(p, 'utf8'))) {
+  var txt = /\.(js|html|css|md|gs|txt|json|webmanifest)$/.test(e.name) ? fs.readFileSync(p, 'utf8') : '';
+  if (txt && (proibidos.test(txt) || /LINK_PAGAMENTO/.test(txt))) { // a variável {link_pagamento} do produto é permitida
     throw new Error('Informação que não deveria ir no pacote em: ' + path.relative(pasta, p));
   }
 });

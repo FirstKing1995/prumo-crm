@@ -18,6 +18,10 @@
     email_aberto: ['Abriu um e-mail', 'Quando o contato abre um e-mail (de campanha ou de automação)'],
     email_clicou: ['Clicou num e-mail', 'Quando o contato clica num link de e-mail'],
     visitou: ['Visitou o site', 'Quando um contato conhecido visita uma página do seu site'],
+    cobranca_vencendo: ['Cobrança perto de vencer', 'Alguns dias antes do vencimento de uma parcela (dias em Integrações > Mercado Pago)'],
+    cobranca_atrasada: ['Cobrança atrasada', 'No dia seguinte ao vencimento de uma parcela não paga'],
+    pagamento: ['Pagamento recebido', 'Quando uma cobrança é paga (manual ou pelo Mercado Pago)'],
+    reembolso: ['Reembolso', 'Quando um pagamento é reembolsado'],
     manual: ['Manual', 'Só quando alguém inicia (na ficha, em massa ou por outra automação)']
   };
   var TIPOS = {
@@ -109,6 +113,16 @@
       { tipo: 'pontos', acao: 'somar', valor: 30 },
       { tipo: 'tag', acao: 'add', tag: 'Viu preços' },
       { tipo: 'tarefa', titulo: 'Ligar para {nome} (viu a página de preços)', prazo_horas: 2 }] } },
+    { id: 'vencimento', nome: 'Lembrete de vencimento', desc: 'Avisa alguns dias antes, com valor, data e link de pagamento', a: { nome: 'Lembrete de vencimento', gatilho: { tipo: 'cobranca_vencendo' }, passos: [
+      { tipo: 'mensagem', texto: 'Oi {primeiro_nome}! Passando para lembrar que a parcela {parcela} de {descricao_cobranca}, no valor de {valor_parcela}, vence em {vencimento}.\n\nPara pagar agora: {link_pagamento}' }] } },
+    { id: 'inadimplente', nome: 'Recuperar inadimplente', desc: 'Cobra com gentileza, insiste depois de 3 dias e cria tarefa', a: { nome: 'Recuperar inadimplente', gatilho: { tipo: 'cobranca_atrasada' }, passos: [
+      { tipo: 'mensagem', texto: 'Oi {primeiro_nome}, tudo bem? Não identificamos o pagamento da parcela de {valor_parcela} que venceu em {vencimento}. Se já pagou, desconsidere. Se precisar, o link é este: {link_pagamento}' },
+      { tipo: 'esperar', valor: 3, unidade: 'dias' },
+      { tipo: 'condicao', se: 'tag', op: 'tem', valor: 'Inadimplente', sim: '', nao: 'fim' },
+      { tipo: 'mensagem', texto: '{primeiro_nome}, conseguimos te ajudar com a parcela em aberto? Se preferir, posso mudar a data ou a forma de pagamento.' },
+      { tipo: 'tarefa', titulo: 'Ligar para {nome}: parcela em atraso', prazo_horas: 24 }] } },
+    { id: 'obrigado', nome: 'Obrigado pelo pagamento', desc: 'Confirma o recebimento na hora', a: { nome: 'Obrigado pelo pagamento', gatilho: { tipo: 'pagamento' }, passos: [
+      { tipo: 'mensagem', texto: 'Recebemos o seu pagamento de {valor_parcela}, {primeiro_nome}. Obrigado!' }] } },
     { id: 'comentario', nome: 'Comentou no post, recebe no Direct', desc: 'Instagram: quem comenta a palavra recebe o link no privado', a: { nome: 'Comentário no Instagram para Direct', gatilho: { tipo: 'comentario', palavras: 'eu quero, quero, link', modo: 'contem' }, passos: [
       { tipo: 'responder_comentario', texto: '{Te chamei no Direct!|Olha seu Direct!|Enviei no seu Direct}' },
       { tipo: 'mensagem', texto: 'Oi! Vi seu comentário. Aqui está o que você pediu: https://seusite.com.br' },
@@ -245,10 +259,13 @@
     var e = editando;
     var g = e.gatilho;
     var h = '<div class="barra-ferr"><button class="btn" id="ed-volta">' + ic('esq') + ' Voltar</button>' +
-      '<input class="inp" id="ed-nome" style="max-width:380px;font-weight:600" value="' + esc(e.nome) + '" aria-label="Nome da automação">' +
+      '<input class="inp" id="ed-nome" style="max-width:340px;font-weight:600" value="' + esc(e.nome) + '" aria-label="Nome da automação">' +
+      '<div class="seg"><button id="ed-vis" class="' + (modoVisual ? 'on' : '') + '">' + ic('bifurca') + ' Visual</button><button id="ed-lis" class="' + (modoVisual ? '' : 'on') + '">' + ic('lista') + ' Lista</button></div>' +
       '<div class="dir"><label class="check" style="margin:0"><input type="checkbox" id="ed-ativo"' + (e.ativo === 'SIM' ? ' checked' : '') + '> Ativa</label>' +
       (e.id ? '<button class="btn" id="ed-testar">' + ic('play') + ' Testar</button><button class="btn perigo" id="ed-exc" aria-label="Excluir">' + ic('lixo') + '</button>' : '') +
       '<button class="btn pri" id="ed-salvar" data-carregando=" Salvando...">Salvar</button></div></div>';
+    if (modoVisual) h += desenharVisual(e) + avisoVariaveis();
+    else {
     h += '<div class="fluxo"><div class="passo passo-gat"><div class="passo-cab"><span class="passo-ic" style="background:var(--pri);color:var(--pri-txt)">' + ic('raio') + '</span><div><div class="passo-num">QUANDO</div><b>' + esc(resumoGatilho(g)) + '</b></div>' +
       '<div class="acoes"><button class="btn peq" id="ed-gat">' + ic('lapis') + ' Alterar</button></div></div>' +
       '<div class="passo-res"><label class="check" style="margin:6px 0 0"><input type="checkbox" id="ed-umavez"' + (e.uma_vez === 'SIM' ? ' checked' : '') + '> Cada contato entra só uma vez nesta automação</label></div></div>';
@@ -261,18 +278,23 @@
         '<div class="passo-res">' + esc(resumoPasso(p)) +
         (p.tipo === 'menu' ? '<div>' + (p.opcoes || []).map(function (o, k) { return '<span class="ramo op">' + (k + 1) + '. ' + esc(o.rotulo) + ' > ' + rotuloPasso(o.ir) + '</span>'; }).join('') + '</div>' : '') +
         (p.tipo === 'condicao' ? '<div><span class="ramo sim">Sim > ' + rotuloPasso(p.sim) + '</span><span class="ramo nao">Não > ' + rotuloPasso(p.nao) + '</span></div>' : '') +
+        (p.prox ? '<div><span class="ramo">Depois > ' + rotuloPasso(p.prox) + '</span></div>' : '') +
         ((p.tipo === 'pergunta' || p.tipo === 'menu' || p.tipo === 'formulario') && p.expira_horas ? '<div><span class="ramo nao">Sem resposta em ' + p.expira_horas + 'h > ' + rotuloPasso(p.sem_resposta || 'fim') + '</span></div>' : '') +
         '</div></div>' + conector(i + 1);
     });
     if (!e.passos.length) h += '<p class="small muted" style="text-align:center">Clique no + para adicionar o primeiro passo.</p>';
-    h += '<div class="aviso info" style="margin-top:20px">' + ic('info') + '<div>Variáveis que você pode usar nos textos: <b>{primeiro_nome}</b>, <b>{nome}</b>, <b>{saudacao}</b> (bom dia/boa tarde), <b>{minha_empresa}</b>, <b>{atendente}</b>, <b>{empresa}</b>, <b>{email}</b> e os campos personalizados. Para variar o texto e evitar bloqueio: <b>{Oi|Olá|E aí}</b> sorteia uma das opções.</div></div></div>';
+    h += avisoVariaveis() + '</div>';
+    }
     el.innerHTML = h;
-    var ler = function () { e.nome = C.$('#ed-nome').value; e.ativo = C.$('#ed-ativo').checked ? 'SIM' : 'NAO'; e.uma_vez = C.$('#ed-umavez').checked ? 'SIM' : 'NAO'; };
+    C.$('#ed-vis').onclick = function () { ler(); modoVisual = true; C.render(); };
+    C.$('#ed-lis').onclick = function () { ler(); modoVisual = false; C.render(); };
+    if (modoVisual) ligarVisual(el, e, function () { ler(); });
+    function ler() { e.nome = C.$('#ed-nome').value; e.ativo = C.$('#ed-ativo').checked ? 'SIM' : 'NAO'; e.uma_vez = C.$('#ed-umavez').checked ? 'SIM' : 'NAO'; }
     C.$('#ed-volta').onclick = function () { editando = null; C.render(); };
     C.$('#ed-gat').onclick = function () { ler(); editarGatilho(); };
     C.$$('[data-add]', el).forEach(function (b) { b.onclick = function () { ler(); escolherTipo(Number(b.dataset.add)); }; });
     C.$$('[data-edp]', el).forEach(function (b) { b.onclick = function () { ler(); editarPasso(Number(b.dataset.edp)); }; });
-    C.$$('[data-del]', el).forEach(function (b) { b.onclick = function () { ler(); e.passos.splice(Number(b.dataset.del), 1); C.render(); }; });
+    C.$$('[data-del]', el).forEach(function (b) { b.onclick = function () { ler(); removerPasso(Number(b.dataset.del)); C.render(); }; });
     C.$$('[data-up]', el).forEach(function (b) { b.onclick = function () { ler(); var i = Number(b.dataset.up); var x = e.passos.splice(i, 1)[0]; e.passos.splice(i - 1, 0, x); C.render(); }; });
     C.$$('[data-down]', el).forEach(function (b) { b.onclick = function () { ler(); var i = Number(b.dataset.down); var x = e.passos.splice(i, 1)[0]; e.passos.splice(i + 1, 0, x); C.render(); }; });
     C.$('#ed-salvar').onclick = function () {
@@ -302,6 +324,150 @@
     var ts = C.$('#ed-testar');
     if (ts) ts.onclick = function () { ler(); testar(); };
   }
+  function avisoVariaveis() {
+    return '<div class="aviso info" style="margin-top:20px">' + ic('info') + '<div>Variáveis que você pode usar nos textos: <b>{primeiro_nome}</b>, <b>{nome}</b>, <b>{saudacao}</b> (bom dia/boa tarde), <b>{minha_empresa}</b>, <b>{atendente}</b>, <b>{empresa}</b>, <b>{email}</b> e os campos personalizados. Em automações de cobrança: <b>{valor_parcela}</b>, <b>{vencimento}</b>, <b>{parcela}</b>, <b>{link_pagamento}</b>. Para variar o texto e evitar bloqueio: <b>{Oi|Olá|E aí}</b> sorteia uma das opções.</div></div>';
+  }
+
+  /* ---------------------------------------------- construtor visual (blocos ligados) */
+  var modoVisual = true, zoom = 1, pan = { x: 0, y: 0 };
+  function destinoPadrao(passos, i) { var p = passos[i]; return p.prox || (passos[i + 1] ? passos[i + 1].id : 'fim'); }
+  /** Saídas de um passo: cada uma vira uma seta. k diz qual campo guarda o destino. */
+  function saidas(passos, i) {
+    var p = passos[i], prox = destinoPadrao(passos, i), sem = [];
+    if (p.tipo === 'fim') return [];
+    if ((p.tipo === 'pergunta' || p.tipo === 'menu' || p.tipo === 'formulario') && p.expira_horas) sem = [{ rot: 'Sem resposta em ' + p.expira_horas + 'h', dest: p.sem_resposta || 'fim', k: 'sem', cl: 'nao' }];
+    if (p.tipo === 'ir') return [{ rot: 'Vai para', dest: p.passo || 'fim', k: 'passo' }];
+    if (p.tipo === 'condicao') return [{ rot: 'Sim', dest: p.sim || prox, k: 'sim', cl: 'sim' }, { rot: 'Não', dest: p.nao || prox, k: 'nao', cl: 'nao' }];
+    if (p.tipo === 'menu') return (p.opcoes || []).map(function (o, k) { return { rot: (k + 1) + '. ' + o.rotulo, dest: o.ir || prox, k: 'op' + k, cl: 'op' }; }).concat(sem);
+    return [{ rot: 'Próximo', dest: prox, k: 'prox' }].concat(sem);
+  }
+  function ligar(passos, i, k, dest) {
+    var p = passos[i];
+    if (k === 'prox') p.prox = dest;
+    else if (k === 'sim' || k === 'nao') p[k] = dest;
+    else if (k === 'passo') p.passo = dest;
+    else if (k === 'sem') p.sem_resposta = dest;
+    else if (k.indexOf('op') === 0) p.opcoes[Number(k.slice(2))].ir = dest;
+  }
+  /** Deixa todas as ligações explícitas: depois disso a ordem da lista não muda o caminho. */
+  function congelar(passos) {
+    passos.forEach(function (p, i) {
+      var d = destinoPadrao(passos, i);
+      if (p.tipo === 'fim' || p.tipo === 'ir') return;
+      if (!p.prox) p.prox = d;
+      if (p.tipo === 'condicao') { if (!p.sim) p.sim = d; if (!p.nao) p.nao = d; }
+      if (p.tipo === 'menu') (p.opcoes || []).forEach(function (o) { if (!o.ir) o.ir = d; });
+    });
+  }
+  function removerPasso(i) {
+    var passos = editando.passos, alvo = passos[i];
+    congelar(passos);
+    var para = alvo.tipo === 'fim' || alvo.tipo === 'ir' ? (alvo.passo || 'fim') : (alvo.prox || 'fim');
+    passos.forEach(function (p) {
+      ['prox', 'sim', 'nao', 'passo', 'sem_resposta'].forEach(function (k) { if (p[k] === alvo.id) p[k] = para === p.id ? 'fim' : para; });
+      (p.opcoes || []).forEach(function (o) { if (o.ir === alvo.id) o.ir = para; });
+    });
+    passos.splice(i, 1);
+  }
+  function desenharVisual(e) {
+    var passos = e.passos, idx = {}, col = {}, fila = [], maxCol = 1;
+    passos.forEach(function (p, i) { idx[p.id] = i; });
+    if (passos.length) { col[passos[0].id] = 1; fila.push(passos[0].id); }
+    while (fila.length) {
+      var id = fila.shift(), i = idx[id];
+      saidas(passos, i).forEach(function (sd) { if (sd.dest !== 'fim' && idx[sd.dest] !== undefined && col[sd.dest] === undefined) { col[sd.dest] = col[id] + 1; maxCol = Math.max(maxCol, col[sd.dest]); fila.push(sd.dest); } });
+    }
+    passos.forEach(function (p) { if (col[p.id] === undefined) col[p.id] = maxCol + 1; });
+    var yCol = {};
+    var no = function (c, alt) { var y = yCol[c] || 40; yCol[c] = y + alt + 36; return { x: 40 + c * 320, y: y }; };
+    var g0 = no(0, 150);
+    var h = '<div class="vcanvas" id="vcanvas"><div class="vplano" id="vplano" style="transform:translate(' + pan.x + 'px,' + pan.y + 'px) scale(' + zoom + ')"><svg class="vsetas" id="vsetas"></svg>' +
+      '<div class="vn vn-gat" data-id="__inicio" style="left:' + g0.x + 'px;top:' + g0.y + 'px"><div class="vn-cab"><span class="passo-ic" style="background:var(--pri);color:var(--pri-txt)">' + ic('raio') + '</span><div class="trunc"><small>QUANDO</small><b class="trunc">' + esc(resumoGatilho(e.gatilho)) + '</b></div><button class="btn fantasma ic peq" id="ed-gat" aria-label="Alterar gatilho">' + ic('lapis') + '</button></div>' +
+      '<label class="check small" style="margin:6px 12px"><input type="checkbox" id="ed-umavez"' + (e.uma_vez === 'SIM' ? ' checked' : '') + '> Só uma vez por contato</label>' +
+      '<div class="vn-saidas"><div class="vn-saida" data-i="-1" data-k="inicio" data-dest="' + (passos[0] ? passos[0].id : 'fim') + '"><span>Começa</span>' + (passos[0] ? '' : '<span class="vn-dest">sem passos</span>') + '<button class="vn-add" data-vadd="-1|inicio" aria-label="Adicionar passo aqui">' + ic('plus') + '</button></div></div></div>';
+    passos.forEach(function (p, i) {
+      var t = TIPOS[p.tipo] || ['?', 'info', 'c-acao'], sd = saidas(passos, i);
+      var pos = no(col[p.id], 110 + sd.length * 34);
+      h += '<div class="vn" data-id="' + p.id + '" style="left:' + pos.x + 'px;top:' + pos.y + 'px"><div class="vn-cab"><span class="passo-ic ' + t[2] + '">' + ic(t[1]) + '</span><div class="trunc"><small>PASSO ' + (i + 1) + '</small><b class="trunc">' + t[0] + '</b></div>' +
+        '<button class="btn fantasma ic peq" data-vedit="' + i + '" aria-label="Editar">' + ic('lapis') + '</button><button class="btn fantasma ic peq perigo" data-vdel="' + i + '" aria-label="Remover">' + ic('lixo') + '</button></div>' +
+        '<div class="vn-res" data-vedit="' + i + '">' + esc(resumoPasso(p)) + '</div>' +
+        '<div class="vn-saidas">' + sd.map(function (x) { return '<div class="vn-saida ' + (x.cl || '') + '" data-i="' + i + '" data-k="' + x.k + '" data-dest="' + x.dest + '"><span class="trunc">' + esc(x.rot) + '</span>' + (x.dest === 'fim' ? '<button class="vn-dest" data-vdest="' + i + '|' + x.k + '">fim</button>' : '<button class="vn-dest" data-vdest="' + i + '|' + x.k + '">' + rotuloPasso(x.dest) + '</button>') + '<button class="vn-add" data-vadd="' + i + '|' + x.k + '" aria-label="Adicionar passo nesta saída">' + ic('plus') + '</button></div>'; }).join('') + '</div></div>';
+    });
+    h += '</div><div class="vzoom"><button class="btn peq" id="vz-menos" aria-label="Diminuir">−</button><button class="btn peq" id="vz-cem">' + Math.round(zoom * 100) + '%</button><button class="btn peq" id="vz-mais" aria-label="Aumentar">+</button><button class="btn peq" id="vz-ini">Centralizar</button></div>' +
+      '<div class="vdica small muted">Arraste o fundo para mover. Clique no <b>+</b> de uma saída para criar o próximo passo ali. Clique no destino para ligar a outro passo.</div></div>';
+    return h;
+  }
+  function ligarVisual(el, e, ler) {
+    var plano = C.$('#vplano', el), cv = C.$('#vcanvas', el), svg = C.$('#vsetas', el);
+    var aplicar = function () { plano.style.transform = 'translate(' + pan.x + 'px,' + pan.y + 'px) scale(' + zoom + ')'; C.$('#vz-cem', el).textContent = Math.round(zoom * 100) + '%'; };
+    // setas
+    var desenhar = function () {
+      var pr = plano.getBoundingClientRect(), W = plano.scrollWidth + 400, H = plano.scrollHeight + 400, d = '';
+      svg.setAttribute('width', W); svg.setAttribute('height', H);
+      C.$$('.vn-saida', plano).forEach(function (sd) {
+        var dest = sd.dataset.dest;
+        if (!dest || dest === 'fim') return;
+        var alvo = plano.querySelector('.vn[data-id="' + dest + '"]');
+        if (!alvo) return;
+        var a = sd.getBoundingClientRect(), b = alvo.getBoundingClientRect();
+        var x1 = (a.right - pr.left) / zoom, y1 = (a.top + a.height / 2 - pr.top) / zoom, x2 = (b.left - pr.left) / zoom, y2 = (b.top + 26 - pr.top) / zoom;
+        var dx = Math.max(60, Math.abs(x2 - x1) / 2);
+        var cor = sd.classList.contains('sim') ? 'var(--verde)' : sd.classList.contains('nao') ? 'var(--vermelho)' : 'var(--pri)';
+        d += '<path d="M' + x1 + ' ' + y1 + ' C' + (x1 + dx) + ' ' + y1 + ',' + (x2 - dx) + ' ' + y2 + ',' + x2 + ' ' + y2 + '" stroke="' + cor + '" stroke-width="2" fill="none" marker-end="url(#vseta)" opacity=".85"/>';
+      });
+      svg.innerHTML = '<defs><marker id="vseta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--txt-3)"/></marker></defs>' + d;
+    };
+    setTimeout(desenhar, 30);
+    window.addEventListener("resize", function rd() { if (!svg.isConnected) return window.removeEventListener("resize", rd); desenhar(); });
+    // mover e aproximar
+    var arr = null;
+    cv.addEventListener('pointerdown', function (ev) { if (ev.target.closest('.vn,.vzoom,button,input,label')) return; arr = { x: ev.clientX - pan.x, y: ev.clientY - pan.y }; cv.setPointerCapture(ev.pointerId); cv.classList.add('arrastando'); });
+    cv.addEventListener('pointermove', function (ev) { if (!arr) return; pan.x = ev.clientX - arr.x; pan.y = ev.clientY - arr.y; aplicar(); });
+    cv.addEventListener('pointerup', function () { arr = null; cv.classList.remove('arrastando'); });
+    cv.addEventListener('wheel', function (ev) { if (!ev.ctrlKey && !ev.metaKey) return; ev.preventDefault(); zoom = Math.min(1.6, Math.max(0.4, zoom * (ev.deltaY < 0 ? 1.1 : 0.9))); aplicar(); }, { passive: false });
+    C.$('#vz-mais', el).onclick = function () { zoom = Math.min(1.6, zoom + 0.1); aplicar(); };
+    C.$('#vz-menos', el).onclick = function () { zoom = Math.max(0.4, zoom - 0.1); aplicar(); };
+    C.$('#vz-cem', el).onclick = function () { zoom = 1; aplicar(); };
+    C.$('#vz-ini', el).onclick = function () { zoom = 1; pan = { x: 0, y: 0 }; aplicar(); };
+    // editar, remover, inserir e religar
+    C.$$('[data-vedit]', el).forEach(function (b) { b.onclick = function () { ler(); editarPasso(Number(b.dataset.vedit)); }; });
+    C.$$('[data-vdel]', el).forEach(function (b) { b.onclick = function () { ler(); removerPasso(Number(b.dataset.vdel)); C.render(); }; });
+    C.$$('[data-vadd]', el).forEach(function (b) {
+      b.onclick = function () {
+        ler();
+        var x = b.dataset.vadd.split('|'), i = Number(x[0]), k = x[1];
+        escolherSoTipo(function (tipo) {
+          var antes = JSON.stringify(e.passos);
+          var desfazer = function () { e.passos = JSON.parse(antes); };
+          congelar(e.passos);
+          var np = novoPasso(tipo);
+          if (k === 'inicio') { np.prox = e.passos[0] ? e.passos[0].id : 'fim'; e.passos.unshift(np); }
+          else {
+            var velho = (saidas(e.passos, i).filter(function (sd) { return sd.k === k; })[0] || {}).dest || 'fim';
+            if (tipo !== 'fim') np.prox = velho;
+            e.passos.push(np);
+            ligar(e.passos, i, k, np.id);
+          }
+          if (tipo === 'fim' || tipo === 'ir') { C.render(); if (tipo === 'ir') editarPasso(e.passos.indexOf(np), true, desfazer); return; }
+          editarPasso(e.passos.indexOf(np), true, desfazer);
+        });
+      };
+    });
+    C.$$('[data-vdest]', el).forEach(function (b) {
+      b.onclick = function () {
+        ler();
+        var x = b.dataset.vdest.split('|'), i = Number(x[0]), k = x[1];
+        var ops = [['fim', 'Encerrar o fluxo']].concat(e.passos.filter(function (p, j) { return j !== i; }).map(function (p) { return [p.id, 'Passo ' + (e.passos.indexOf(p) + 1) + ': ' + (TIPOS[p.tipo] || ['?'])[0] + ' - ' + String(resumoPasso(p)).slice(0, 40)]; }));
+        C.pedirTexto('Ligar esta saída a', 'Destino', (saidas(e.passos, i).filter(function (sd) { return sd.k === k; })[0] || {}).dest, { opcoes: ops, botao: 'Ligar' }).then(function (v) {
+          if (!v) return;
+          congelar(e.passos);
+          ligar(e.passos, i, k, v);
+          C.render();
+        }).catch(function (er) { C.toast(er.message, 'erro'); });
+      };
+    });
+  }
+
   function conector(pos) { return '<div class="conector"><span class="linha-v"></span><button class="add-passo" data-add="' + pos + '" aria-label="Adicionar passo">' + ic('plus') + '</button><span class="linha-v"></span></div>'; }
 
   function editarGatilho() {
@@ -354,6 +520,25 @@
     };
   }
 
+  function novoPasso(tipo) {
+    var p = { id: novoId(), tipo: tipo };
+    if (p.tipo === 'esperar') { p.valor = 1; p.unidade = 'horas'; }
+    if (p.tipo === 'menu') p.opcoes = [{ rotulo: 'Opção 1', ir: '' }, { rotulo: 'Opção 2', ir: '' }];
+    if (p.tipo === 'condicao') { p.se = 'tag'; p.op = 'tem'; }
+    if (p.tipo === 'tag') p.acao = 'add';
+    if (p.tipo === 'atribuir' || p.tipo === 'passar') p.modo = 'rodizio';
+    if (p.tipo === 'formulario') p.perguntas = [{ campo: 'nome', texto: 'Qual é o seu nome?', validar: 'texto' }, { campo: 'email', texto: 'Qual o seu e-mail?', validar: 'email' }];
+    if (p.tipo === 'pontos') { p.acao = 'somar'; p.valor = 10; }
+    if (p.tipo === 'humano') p.horas = 24;
+    return p;
+  }
+  function escolherSoTipo(depois) {
+    var el = C.modal({
+      titulo: 'Adicionar passo', tamanho: 'largo',
+      corpo: '<div class="tipos-passo">' + Object.keys(TIPOS).map(function (k) { var t = TIPOS[k]; return '<button class="tipo-passo" data-t="' + k + '"><span class="passo-ic ' + t[2] + '">' + ic(t[1]) + '</span><div><b>' + t[0] + '</b><span>' + t[3] + '</span></div></button>'; }).join('') + '</div>'
+    });
+    C.$$('[data-t]', el).forEach(function (b) { b.onclick = function () { el.fechar(); depois(b.dataset.t); }; });
+  }
   function escolherTipo(pos) {
     var el = C.modal({
       titulo: 'Adicionar passo', tamanho: 'largo',
@@ -396,7 +581,7 @@
     return l;
   }
 
-  function editarPasso(i, novo) {
+  function editarPasso(i, novo, desfazer) {
     var p = editando.passos[i];
     var t = TIPOS[p.tipo];
     var corpo = '';
@@ -418,7 +603,7 @@
       case 'pontos': corpo = '<div class="grade2"><div class="campo"><label>Ação</label>' + sel('p-acao', [['somar', 'Somar (use número negativo para tirar)'], ['zerar', 'Zerar pontuação']], p.acao) + '</div><div class="campo"><label>Pontos</label><input class="inp" type="number" id="p-valor" value="' + esc(p.valor || 10) + '"></div></div><p class="small muted">Use uma Condição com o campo Pontuação para separar quem está pronto para comprar.</p>'; break;
       case 'responder_comentario': corpo = campoTexto(p, 'Resposta pública no comentário') + '<p class="small muted">Só funciona em automações com o gatilho Comentou no Instagram. Varie o texto com {opção A|opção B} para não parecer repetido.</p>'; break;
       case 'email': corpo = (S.emails || []).length ? '<div class="campo"><label>E-mail</label><select class="inp" id="p-email">' + opcoesEmails(p.email_id, 'Escolha') + '</select><span class="ajuda">Crie e edite os e-mails em E-mail marketing > E-mails de automação.</span></div>' : '<div class="aviso">' + ic('info') + '<div>Crie primeiro um e-mail em <b>E-mail marketing > E-mails de automação</b>.</div></div>'; break;
-      case 'activecampaign': corpo = '<div class="campo"><label>Tags para aplicar no ActiveCampaign</label><input class="inp" id="p-tags" value="' + esc(p.tags || '') + '" placeholder="Lead WhatsApp, Qualificado"><span class="ajuda">O contato precisa ter e-mail. A lista padrão é a escolhida em Integrações > ActiveCampaign.</span></div>'; break;
+      case 'activecampaign': corpo = '<div class="campo"><label>Tags para aplicar no ActiveCampaign</label><input class="inp" id="p-actags" value="' + esc(p.tags || '') + '" placeholder="Lead WhatsApp, Qualificado"><span class="ajuda">O contato precisa ter e-mail. A lista padrão é a escolhida em Integrações > ActiveCampaign.</span></div>'; break;
       case 'pergunta':
         corpo = campoTexto(p, 'Pergunta') + '<div class="grade2"><div class="campo"><label>Salvar a resposta em</label>' + sel('p-campo', camposDestino(), p.campo) + '</div>' +
           '<div class="campo"><label>Validar resposta</label>' + sel('p-validar', [['texto', 'Qualquer texto'], ['email', 'E-mail'], ['telefone', 'Telefone'], ['numero', 'Número']], p.validar) + '</div></div>' +
@@ -446,7 +631,7 @@
     var el = C.modal({
       titulo: t[0], tamanho: 'largo', corpo: corpo,
       pe: '<button class="btn" data-fechar>' + (novo ? 'Cancelar' : 'Fechar') + '</button><button class="btn pri" id="p-ok">Aplicar</button>',
-      aoFechar: function () { if (novo && !aplicado) { editando.passos.splice(i, 1); } C.render(); }
+      aoFechar: function () { if (novo && !aplicado) { if (desfazer) desfazer(); else editando.passos.splice(i, 1); } C.render(); }
     });
     var aplicado = false;
     C.$$('[data-var]', el).forEach(function (b) {
@@ -494,14 +679,14 @@
     var se = el.querySelector('#p-se'); if (se) { se.onchange = pintaCond; pintaCond(); }
 
     el.querySelector('#p-ok').onclick = function () {
-      var v = function (id) { var x = el.querySelector('#' + id); return x ? x.value.trim() : undefined; };
+      var v = function (id) { var x = el.querySelector('#' + id); return x && typeof x.value === 'string' ? x.value.trim() : undefined; };
       var set = function (k, id, num) { var x = v(id); if (x !== undefined) p[k] = num ? Number(x) || 0 : x; };
       set('texto', 'p-texto'); set('midia_tipo', 'p-mtipo'); set('midia_url', 'p-murl'); set('campo', 'p-campo'); set('validar', 'p-validar'); set('erro_texto', 'p-erro');
       set('valor', 'p-valor'); set('unidade', 'p-unid'); set('se', 'p-se'); set('op', 'p-op'); set('sim', 'p-sim'); set('nao', 'p-nao');
       set('acao', 'p-acao'); set('tag', 'p-tag'); set('etapa_id', 'p-etapa'); set('modo', 'p-modo'); set('usuario_id', 'p-usuario');
       set('titulo', 'p-titulo'); set('prazo_horas', 'p-prazo', true); set('horas', 'p-horas', true); set('url', 'p-url'); set('passo', 'p-passo');
       set('inicio', 'p-ini'); set('fim', 'p-fim'); set('dias', 'p-dias'); set('expira_horas', 'p-exp', true); set('sem_resposta', 'p-semresp');
-      set('meta_modelo', 'p-mmod'); set('meta_variaveis', 'p-mvars'); set('meta_categoria', 'p-mcat'); set('flow_id', 'p-flow'); set('botao', 'p-botao'); set('tela', 'p-tela'); set('nota', 'p-nota'); set('tags', 'p-tags'); set('email_id', 'p-email');
+      set('meta_modelo', 'p-mmod'); set('meta_variaveis', 'p-mvars'); set('meta_categoria', 'p-mcat'); set('flow_id', 'p-flow'); set('botao', 'p-botao'); set('tela', 'p-tela'); set('nota', 'p-nota'); set('tags', 'p-actags'); set('email_id', 'p-email');
       if (p.tipo === 'email' && !p.email_id) { C.toast('Escolha o e-mail', 'erro'); return; }
       if (p.tipo === 'formulario') { p.perguntas = qs.filter(function (q) { return q.texto.trim(); }); if (!p.perguntas.length && !p.flow_id) { C.toast('Adicione pelo menos uma pergunta ou o ID do Flow', 'erro'); return; } }
       if (p.tipo === 'pontos') p.valor = Number(p.valor) || 0;

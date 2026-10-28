@@ -30,6 +30,10 @@ const P = {
   http: (url, o) => {
     if (/connectionState/.test(url)) return { code: 200, text: '{"instance":{"state":"open"}}' };
     enviados.push({ url, body: o.body ? JSON.parse(o.body) : null });
+    // Mercado Pago simulado
+    if (/api\.mercadopago\.com\/checkout\/preferences/.test(url)) return { code: 201, text: JSON.stringify({ id: 'PREF' + enviados.length, init_point: 'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=PREF' + enviados.length }) };
+    if (/api\.mercadopago\.com\/v1\/payments\//.test(url)) return { code: 200, text: JSON.stringify(mpPagamentos[url.split('/').pop()] || {}) };
+    if (/api\.mercadopago\.com\/users\/me/.test(url)) return { code: 200, text: '{"nickname":"LOJA_TESTE"}' };
     return { code: 201, text: JSON.stringify({ key: { id: 'OUT' + enviados.length } }) };
   },
   urlApp: () => 'https://script.google.com/macros/s/TESTE/exec',
@@ -44,6 +48,7 @@ const P = {
 };
 const arq = {};
 const emailsSaidos = [];
+const mpPagamentos = {};
 
 const L = PrumoLogica(P);
 L.semear({ nome: 'Admin', email: 'admin@teste.com', senha: 'senha-forte-1' });
@@ -133,5 +138,6 @@ ok(JSON.stringify(api('config.ver')).indexOf('"k"') < 0 && api('config.ver').EVO
 
 require('./testar-novos.js')({ L, P, t, cfg, cache, enviados, api, ok, lanca, arq, iso });
 require('./testar-email.js')({ L, P, t, cfg, enviados, api, ok, lanca, emailsSaidos });
+require('./testar-v13.js')({ L, P, t, cfg, enviados, api, ok, lanca, mpPagamentos });
 console.log((total - falhas) + '/' + total + ' testes passaram');
 process.exit(falhas ? 1 : 0);

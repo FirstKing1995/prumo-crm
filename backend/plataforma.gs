@@ -239,6 +239,12 @@ var PLAT = {
     },
     cotaGmail: function () { return MailApp.getRemainingDailyQuota(); }
   },
+  /** Células usadas na planilha principal (o Google aceita até 10 milhões). */
+  uso: function () {
+    var n = 0;
+    SpreadsheetApp.getActiveSpreadsheet().getSheets().forEach(function (sh) { n += sh.getMaxRows() * sh.getMaxColumns(); });
+    return { celulas: n, limite: 10000000 };
+  },
   dormir: function (ms) { Utilities.sleep(ms); },
   urlPlanilha: function () { return SpreadsheetApp.getActiveSpreadsheet().getUrl(); },
   urlApp: function () {
@@ -307,7 +313,7 @@ function doPost(e) {
   try { body = JSON.parse(bruto || '{}'); } catch (err) { body = {}; }
   if ((!body || !Object.keys(body).length) && Object.keys(p).length) {
     body = {};
-    Object.keys(p).forEach(function (k) { if (['src', 'k', 'tags', 'origem', 'automacao', 'etapa', 'fonte'].indexOf(k) < 0) body[k] = p[k]; });
+    Object.keys(p).forEach(function (k) { if (['src', 'k', 'tags', 'origem', 'automacao', 'etapa', 'fonte', 'type', 'topic', 'data.id', 'id'].indexOf(k) < 0) body[k] = p[k]; });
   }
   // Webhooks (WhatsApp e formulários)
   if (p.src) {
@@ -321,7 +327,7 @@ function doPost(e) {
   }
   // Chamadas do site
   try {
-    var leitura = /^(bootstrap|sync|conversa\.abrir|contato\.ver|relatorio|config\.ver|wa\.status|campanha\.envios|campanha\.custo|automacao\.execucoes|contato\.publico|publico\.marca|arquivo\.listar|arquivo\.contato|integracao\.testar)$/.test(body.action);
+    var leitura = /^(bootstrap|sync|conversa\.abrir|contato\.ver|relatorio|config\.ver|wa\.status|campanha\.envios|campanha\.custo|automacao\.execucoes|contato\.publico|publico\.marca|arquivo\.listar|arquivo\.contato|integracao\.testar|financeiro\.resumo|cobranca\.listar|limites|suporte\.ver|publico\.chat\.config|publico\.chat\.receber)$/.test(body.action);
     var exec = function () { return logica_().rotear(body); };
     var dados = leitura ? exec() : comTrava_(exec);
     return json_({ ok: true, data: dados });

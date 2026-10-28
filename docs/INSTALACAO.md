@@ -137,6 +137,12 @@ Em **Equipe e acessos** (só o administrador vê), crie uma conta para cada pess
 
 Todo mês os dados fechados do mês anterior vão para uma planilha própria no seu Google Drive, e a planilha principal fica leve. Detalhes: `docs/ARQUIVO_MENSAL.md`.
 
+## Financeiro, chat do site e suporte
+
+- Cobranças, parcelas, inadimplentes e Mercado Pago: `docs/FINANCEIRO.md`.
+- Janela de conversa para o seu site: `docs/CHAT_DO_SITE.md`.
+- O que o seu plano de suporte inclui e como ver ele no sistema: `docs/SUPORTE_E_ATUALIZACOES.md`.
+
 ## E-mail marketing
 
 Campanhas e e-mails de automação saem pelo Gmail da sua conta, sem custo. Configure o remetente e o rodapé em Integrações > Envio de e-mails. Guia completo: `docs/EMAIL_MARKETING.md`.
@@ -148,6 +154,8 @@ Campanhas e e-mails de automação saem pelo Gmail da sua conta, sem custo. Conf
 **Servidor:** Apps Script > cole o `Codigo.gs` novo por cima (mantenha o seu `ADMIN_INICIAL`) > **Implantar > Gerenciar implantações > lápis > Versão: Nova versão > Implantar**. A URL `/exec` continua a mesma. Rode **instalar** de novo se a versão pedir (ele só cria o que falta, não apaga dados).
 
 **Site:** no GitHub, envie os arquivos novos da pasta `site` do mesmo jeito do Passo 6. Se você editou o `config.js`, não envie o `config.js` novo por cima.
+
+**Para a versão 1.3 (financeiro, chat do site, acessos personalizados):** cole o `Codigo.gs` novo, rode **instalar** de novo (cria a aba Cobrancas e as colunas novas), publique a nova versão e envie os arquivos novos da pasta `site` (inclui `chat.js`). Depois cole o seu código de suporte em Ajustes > Sistema.
 
 **Para a versão 1.2 (e-mail marketing):** cole o `Codigo.gs` novo, rode **instalar** de novo e aceite a nova permissão do Google ("enviar e-mail como você"). Depois publique a nova versão e envie os arquivos novos do site (inclui `r.html` e `rastreio.js`).
 

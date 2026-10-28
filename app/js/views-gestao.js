@@ -98,6 +98,8 @@
     { id: 'meta', grupo: 'WhatsApp', nome: 'API oficial da Meta', cor: '#2563EB', ic: 'escudo', tag: 'Oficial', desc: 'WhatsApp Cloud API. Sem risco de bloqueio por uso de API não oficial. A Meta cobra por mensagem iniciada pela empresa.' },
     { id: 'link', grupo: 'WhatsApp', nome: 'Modo link (sem API)', cor: '#64748B', ic: 'link', tag: 'Sem instalar nada', desc: 'O sistema abre a conversa no seu WhatsApp com o texto pronto e você aperta enviar. Não recebe mensagens nem usa robôs.' },
     { id: 'instagram', grupo: 'Instagram', nome: 'Instagram Direct e comentários', cor: '#C13584', ic: 'instagram', tag: 'API oficial', desc: 'Receba e responda o Direct na mesma caixa de entrada. Quem comentar uma palavra no post recebe a mensagem no Direct, sozinho.' },
+    { id: 'mercadopago', grupo: 'Pagamentos', nome: 'Mercado Pago', cor: '#009EE3', ic: 'dinheiro', desc: 'Links de pagamento para parcelas e produtos. Quando a pessoa paga, a baixa é automática, com tags e automações.' },
+    { id: 'chat', grupo: 'Chat do site', nome: 'Chat do site', cor: '#7C3AED', ic: 'conversas', desc: 'Uma janela de conversa no seu site. O visitante deixa nome e WhatsApp e a conversa chega na sua caixa de entrada.' },
     { id: 'email', grupo: 'E-mail marketing', nome: 'Envio de e-mails (Gmail e Brevo)', cor: '#EA4335', ic: 'email', tag: 'Grátis', desc: 'Campanhas e e-mails de automação saem pelo Gmail da sua conta Google. Para mandar mais por dia, some o plano grátis do Brevo.' },
     { id: 'rastreio', grupo: 'E-mail marketing', nome: 'Rastreio do site', cor: '#0891B2', ic: 'olho', desc: 'Saiba quais páginas do seu site os contatos visitam depois de clicar num e-mail e dispare automações por isso.' },
     { id: 'hotmart', grupo: 'Vendas e cursos', nome: 'Hotmart', cor: '#F04E23', ic: 'carrinho', desc: 'Compra aprovada, carrinho abandonado, boleto, reembolso e cancelamento viram tags, negócio ganho e gatilho de automação.' },
@@ -118,7 +120,7 @@
     INTEG.forEach(function (i) { (grupos[i.grupo] = grupos[i.grupo] || []).push(i); });
     Object.keys(grupos).forEach(function (g) {
       h += '<h3 style="font-size:14px;margin:22px 0 10px;color:var(--txt-2)">' + g + '</h3><div class="integ-grade">' + grupos[g].map(function (i) {
-        var ativo = (i.grupo === 'WhatsApp' && prov === i.id) || (i.id === 'instagram' && S.config.instagram) || (i.id === 'activecampaign' && S.config.activecampaign);
+        var ativo = (i.grupo === 'WhatsApp' && prov === i.id) || (i.id === 'instagram' && S.config.instagram) || (i.id === 'activecampaign' && S.config.activecampaign) || (i.id === 'mercadopago' && S.config.mercadopago) || (i.id === 'chat' && S.config.chat);
         return '<div class="card integ"><div class="integ-cab"><span class="integ-logo" style="background:' + i.cor + '1A;color:' + i.cor + '">' + ic(i.ic) + '</span><div><b>' + i.nome + '</b>' + (ativo ? ' <span class="status st-on">Em uso</span>' : i.tag ? ' <span class="status st-off">' + i.tag + '</span>' : '') + '</div></div>' +
           '<p>' + i.desc + '</p><button class="btn ' + (ativo ? 'pri' : '') + '" data-in="' + i.id + '">' + (i.grupo === 'WhatsApp' ? (ativo ? 'Configurar' : 'Usar e configurar') : 'Abrir') + ' ' + ic('dir') + '</button></div>';
       }).join('') + '</div>';
@@ -252,6 +254,32 @@
         '<div class="campo"><label>Token de verificação do webhook</label><input class="inp" id="ig-verify" value="' + esc(CFGA.META_VERIFY || '') + '"></div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" id="ig-salvar" data-carregando=" Salvando...">Salvar</button><button class="btn" id="ig-testar" data-carregando=" Testando...">' + ic('play') + ' Testar conexão</button></div>' +
         '<div id="ig-res" style="margin-top:10px"></div><div style="margin-top:16px"><span class="rot">URL de retorno (webhook)</span>' + C.copiavel(urlWa) + '</div></div></div>';
+    } else if (id === 'mercadopago') {
+      corpo = semUrl + '<div class="grid-2" style="align-items:start"><div><h3 style="font-size:15px;margin-bottom:12px">Tutorial</h3><ol class="passos-tut">' +
+        '<li><b>Entre no painel de desenvolvedor</b>Em mercadopago.com.br/developers, faça login com a conta que vai receber os pagamentos e clique em Suas integrações > Criar aplicação (tipo Checkout Pro).</li>' +
+        '<li><b>Copie o Access Token de produção</b>Na aplicação: Credenciais de produção > Access Token (começa com APP_USR-). Para testar antes, use o de teste (TEST-).</li>' +
+        '<li><b>Cole ao lado e teste</b>O sistema confirma a conta.</li>' +
+        '<li><b>Pronto</b>As notificações de pagamento já vão no próprio link (não precisa configurar webhook no painel do Mercado Pago).</li></ol>' +
+        '<h3 style="font-size:15px;margin:16px 0 8px">O que você ganha</h3><ul class="small" style="padding-left:18px;margin-top:0"><li>Link de pagamento em cada parcela das cobranças (Pix, cartão e boleto, conforme a sua conta).</li><li>Links de venda de produtos para divulgar em qualquer lugar.</li><li>Pagou: baixa automática, tag e gatilho "Pagamento recebido". Reembolso ou chargeback também chegam sozinhos.</li><li>Nas mensagens, use {link_pagamento}, {valor_parcela} e {vencimento}.</li></ul>' +
+        '<p class="small muted">O Mercado Pago cobra as tarifas normais dele por venda. O sistema não cobra nada a mais.</p></div>' +
+        '<div><div class="campo"><label>Access Token</label><input class="inp" id="mp-tk" value="' + esc(CFGA.MP_TOKEN) + '" autocomplete="off" placeholder="APP_USR-..."></div>' +
+        '<div class="campo"><label>Página de agradecimento (opcional)</label><input class="inp" id="mp-ret" value="' + esc(CFGA.MP_RETORNO) + '" placeholder="https://seusite.com.br/obrigado"><span class="ajuda">Para onde a pessoa volta depois de pagar.</span></div>' +
+        '<div class="campo"><label>Avisar quantos dias antes do vencimento</label><input class="inp" type="number" min="1" id="mp-dias" value="' + esc(CFGA.LEMBRETE_COBRANCA_DIAS) + '"><span class="ajuda">Usado pelo gatilho "Cobrança perto de vencer".</span></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" id="mp-salvar" data-carregando=" Salvando...">Salvar</button><button class="btn" id="mp-testar" data-carregando=" Testando...">' + ic('play') + ' Testar conexão</button></div><div id="mp-res" style="margin-top:10px"></div>' +
+        (CFGA.URL_WEBHOOK_MP ? '<details style="margin-top:14px"><summary class="small muted">Endereço de notificação (já vai em cada link)</summary><div style="margin-top:8px">' + C.copiavel(CFGA.URL_WEBHOOK_MP) + '</div></details>' : '') + '</div></div>';
+    } else if (id === 'chat') {
+      var chave = (String(CFGA.URL_WEBHOOK_ENTRADA).match(/k=([^&]+)/) || [])[1] || '';
+      var codigoC = '<script src="' + location.origin + location.pathname.replace(/[^/]*$/, '') + 'chat.js" data-api="' + (CFGA.URL_APP || 'URL_DO_APPS_SCRIPT') + '" data-k="' + chave + '" async></' + 'script>';
+      var pedir = C.tags(CFGA.CHAT_PEDIR || '');
+      corpo = '<div class="grid-2" style="align-items:start"><div>' +
+        '<label class="check"><input type="checkbox" id="ch-at"' + (CFGA.CHAT_ATIVO === 'SIM' ? ' checked' : '') + '> Chat ligado</label>' +
+        '<div class="campo"><label>Título da janela</label><input class="inp" id="ch-tit" value="' + esc(CFGA.CHAT_TITULO) + '"></div>' +
+        '<div class="campo"><label>Mensagem de boas-vindas</label><textarea class="inp" id="ch-sau" rows="2">' + esc(CFGA.CHAT_SAUDACAO) + '</textarea></div>' +
+        '<div class="campo"><label>Antes de começar, pedir</label>' + [['nome', 'Nome'], ['whatsapp', 'WhatsApp'], ['email', 'E-mail']].map(function (x) { return '<label class="check" style="display:inline-flex;margin-right:14px"><input type="checkbox" data-ped="' + x[0] + '"' + (pedir.indexOf(x[0]) >= 0 ? ' checked' : '') + '> ' + x[1] + '</label>'; }).join('') + '<span class="ajuda">Assim todo visitante que conversa vira um lead com contato. Recomendado: nome e WhatsApp.</span></div>' +
+        '<button class="btn pri" id="ch-salvar" data-carregando=" Salvando...">Salvar</button></div>' +
+        '<div><span class="rot">Código para o seu site</span><p class="small muted" style="margin-top:4px">Cole antes de <code>&lt;/body&gt;</code> (WordPress: plugin de inserir código no rodapé; Elementor: widget HTML).</p><textarea class="inp" id="ch-cod" rows="3" readonly style="font-family:ui-monospace,Consolas,monospace;font-size:12px">' + esc(codigoC) + '</textarea>' +
+        '<button class="btn" id="ch-copia" style="margin-top:8px">' + ic('copiar') + ' Copiar código</button>' +
+        '<ul class="small" style="padding-left:18px"><li>As conversas aparecem em <b>Conversas</b> com o ícone do site e ficam guardadas no histórico do contato.</li><li>Os robôs (automações) também respondem no chat.</li><li>A cor e o nome seguem a sua marca.</li></ul></div></div>';
     } else if (id === 'email') {
       corpo = '<div class="grid-2" style="align-items:start"><div><h3 style="font-size:15px;margin-bottom:10px">Como funciona, sem custo</h3><ul class="small" style="padding-left:18px;margin-top:0">' +
         '<li><b>Gmail da sua conta Google:</b> o servidor (o Apps Script da sua planilha) manda os e-mails pelo seu Gmail. O Google libera cerca de <b>100 por dia</b> em conta Gmail comum e <b>1.500 por dia</b> no Google Workspace. Deixamos uma margem abaixo do limite.</li>' +
@@ -326,6 +354,10 @@
     on('#w-salvar', function () { var b = this; C.comBotao(b, function () { return salvarCfg({ WA_PROVEDOR: 'waha', WAHA_URL: el.querySelector('#w-url').value.trim(), WAHA_APIKEY: el.querySelector('#w-key').value.trim(), WAHA_SESSAO: el.querySelector('#w-ses').value.trim() || 'default' }).then(function () { C.toast('WAHA salvo. Agora clique em Conectar.', 'ok'); }); }); });
     on('#w-con', function () { var b = this; C.comBotao(b, function () { return C.api('wa.conectar').then(function (r) { mostrarQr(el.querySelector('#w-qr'), r); }); }); });
     on('#m-salvar', function () { var b = this; C.comBotao(b, function () { var v = el.querySelector('#m-verify').value.trim(); if (v.length < 8) throw new Error('Invente um token de verificação com pelo menos 8 caracteres.'); return salvarCfg({ WA_PROVEDOR: 'meta', META_TOKEN: el.querySelector('#m-token').value.trim(), META_PHONE_ID: el.querySelector('#m-phone').value.trim(), META_VERIFY: v, META_PRECO_MARKETING: el.querySelector('#m-pm').value.replace(',', '.'), META_PRECO_UTILITY: el.querySelector('#m-pu').value.replace(',', '.'), META_PRECO_SERVICO: el.querySelector('#m-ps').value.replace(',', '.'), META_FRANQUIA_SERVICO: el.querySelector('#m-pf').value, META_GRATIS_HORAS: el.querySelector('#m-pg').value }).then(function () { C.toast('API oficial salva', 'ok'); }); }); });
+    on('#mp-salvar', function () { var b = this; C.comBotao(b, function () { return salvarCfg({ MP_TOKEN: el.querySelector('#mp-tk').value.trim(), MP_RETORNO: el.querySelector('#mp-ret').value.trim(), LEMBRETE_COBRANCA_DIAS: el.querySelector('#mp-dias').value }).then(function () { S.config.mercadopago = !!el.querySelector('#mp-tk').value.trim(); C.toast('Mercado Pago salvo', 'ok'); }); }); });
+    on('#mp-testar', function () { var b = this; C.comBotao(b, function () { return salvarCfg({ MP_TOKEN: el.querySelector('#mp-tk').value.trim() }).then(function () { return C.api('mp.testar'); }).then(function (r) { S.config.mercadopago = true; el.querySelector('#mp-res').innerHTML = '<div class="aviso ok">' + ic('check') + '<div>' + esc(r.texto) + '</div></div>'; }); }); });
+    on('#ch-salvar', function () { var b = this; C.comBotao(b, function () { return salvarCfg({ CHAT_ATIVO: el.querySelector('#ch-at').checked ? 'SIM' : 'NAO', CHAT_TITULO: el.querySelector('#ch-tit').value, CHAT_SAUDACAO: el.querySelector('#ch-sau').value, CHAT_PEDIR: C.$$('[data-ped]', el).filter(function (x) { return x.checked; }).map(function (x) { return x.dataset.ped; }).join(', ') }).then(function () { S.config.chat = el.querySelector('#ch-at').checked; C.toast('Chat salvo', 'ok'); }); }); });
+    on('#ch-copia', function () { C.copiar(el.querySelector('#ch-cod').value); });
     on('#em-salvar', function () { var b = this; C.comBotao(b, function () { var v = function (x) { return el.querySelector(x).value.trim(); }; if (v('#em-prov') !== 'gmail' && (!v('#em-bk') || !v('#em-br'))) throw new Error('Para usar o Brevo, preencha a chave e o e-mail do remetente.'); return salvarCfg({ EMAIL_PROVEDOR: v('#em-prov'), EMAIL_NOME: v('#em-nome'), EMAIL_RESPONDER: v('#em-resp'), EMAIL_RODAPE: v('#em-rod'), EMAIL_LIMITE_GMAIL: v('#em-lg'), BREVO_APIKEY: v('#em-bk'), BREVO_REMETENTE: v('#em-br'), BREVO_LIMITE: v('#em-bl') }).then(function () { C.toast('Envio de e-mail salvo', 'ok'); }); }); });
     on('#em-teste', function () { var b = this; C.comBotao(b, function () { return C.api('email.testar', { para: el.querySelector('#em-tpara').value, email: { assunto: 'Teste de envio do ' + ((S.config.marca || {}).nome || 'CRM'), blocos: [{ tipo: 'titulo', texto: 'Funcionou!' }, { tipo: 'texto', texto: 'Se você recebeu este e-mail, o envio está configurado.' }] } }).then(function (r) { C.toast('Teste enviado pelo ' + (r.via === 'brevo' ? 'Brevo' : 'Gmail') + '. Confira também a caixa de spam.', 'ok'); }); }); });
     on('#rs-copia', function () { C.copiar(el.querySelector('#rs-cod').value); });
@@ -557,7 +589,7 @@
     render: function (el) {
       var cont = {};
       S.usuarios.forEach(function (u) { cont[u.perfil] = (cont[u.perfil] || 0) + (u.ativo === 'SIM' ? 1 : 0); });
-      var ordem = ['admin', 'gestor', 'sdr', 'closer'];
+      var ordem = ['admin', 'gestor', 'sdr', 'closer', 'personalizado'];
       el.innerHTML = '<div class="barra-ferr"><p class="muted" style="margin:0">Crie uma conta para cada pessoa. Sem limite de usuários. Só o administrador vê esta tela.</p><div class="dir"><button class="btn pri" id="eq-novo">' + ic('usuarioMais') + ' Criar conta</button></div></div>' +
         '<div class="perfis-grade">' + ordem.map(function (k) {
           return '<div class="card perfil-card"><div class="perfil-cab"><b>' + C.PERFIS[k].nome + '</b><span class="chip">' + (cont[k] || 0) + ' ativo' + ((cont[k] || 0) === 1 ? '' : 's') + '</span></div><p>' + C.PERFIS[k].desc + '</p><button class="btn peq" data-criar="' + k + '">' + ic('plus') + ' Criar ' + C.PERFIS[k].nome + '</button></div>';
@@ -580,7 +612,9 @@
     var el = C.modal({
       titulo: u.id ? 'Editar conta' : 'Criar conta',
       corpo: '<div class="grade2"><div class="campo"><label>Nome</label><input class="inp" id="u-nome" value="' + esc(u.nome || '') + '"></div><div class="campo"><label>E-mail (login)</label><input class="inp" type="email" id="u-email" value="' + esc(u.email || '') + '"></div></div>' +
-        '<div class="campo"><label>Perfil</label><div class="perfil-opcoes">' + ['sdr', 'closer', 'gestor', 'admin'].map(function (k) { return '<label class="perfil-op"><input type="radio" name="u-perfil" value="' + k + '"' + ((u.perfil === 'atendente' ? 'sdr' : u.perfil || 'sdr') === k ? ' checked' : '') + '><span><b>' + C.PERFIS[k].nome + '</b><small>' + C.PERFIS[k].desc + '</small></span></label>'; }).join('') + '</div></div>' +
+        '<div class="campo"><label>Perfil</label><div class="perfil-opcoes">' + ['sdr', 'closer', 'gestor', 'personalizado', 'admin'].map(function (k) { return '<label class="perfil-op"><input type="radio" name="u-perfil" value="' + k + '"' + ((u.perfil === 'atendente' ? 'sdr' : u.perfil || 'sdr') === k ? ' checked' : '') + '><span><b>' + C.PERFIS[k].nome + '</b><small>' + C.PERFIS[k].desc + '</small></span></label>'; }).join('') + '</div></div>' +
+        '<div class="campo" id="u-areas-box"><label>O que esta pessoa pode acessar</label><div class="chips" style="margin-bottom:8px">' + Object.keys(C.PERFIS_PRONTOS).map(function (k) { return '<button type="button" class="chip" data-pronto="' + k + '">' + ic('raio') + C.PERFIS_PRONTOS[k].nome + '</button>'; }).join('') + '</div>' +
+        '<div class="areas-grade">' + Object.keys(S.areas || {}).map(function (k) { return '<label class="check"><input type="checkbox" data-area="' + k + '"' + (C.tags(u.permissoes || '').indexOf(k) >= 0 ? ' checked' : '') + '> ' + esc(S.areas[k]) + '</label>'; }).join('') + '</div><span class="ajuda">Conversas, contatos dela, negócios e tarefas sempre ficam liberados.</span></div>' +
         '<div class="grade2"><div class="campo" id="u-meta-v"><label>Meta de vendas no mês (R$)</label><input class="inp" type="number" min="0" id="u-mv" value="' + esc(u.meta_valor || '') + '"></div><div class="campo" id="u-meta-r"><label>Meta de reuniões no mês</label><input class="inp" type="number" min="0" id="u-mr" value="' + esc(u.meta_reunioes || '') + '"></div></div>' +
         '<div class="campo"><label>' + (u.id ? 'Nova senha (deixe em branco para manter)' : 'Senha inicial') + '</label><div class="linha"><input class="inp" type="text" id="u-senha" autocomplete="new-password" value="' + (u.id ? '' : senhaSugerida) + '"><button class="btn" id="u-gerar" style="flex:0 0 auto">' + ic('atualizar') + ' Gerar</button></div><span class="ajuda">Mínimo 8 caracteres. A pessoa pode trocar depois no menu com o nome dela.</span></div>' +
         '<div class="grade2"><label class="check"><input type="checkbox" id="u-recebe"' + (u.recebe_leads === 'SIM' ? ' checked' : '') + '> Recebe leads no rodízio</label><label class="check"><input type="checkbox" id="u-ativo"' + (u.ativo !== 'NAO' ? ' checked' : '') + '> Acesso liberado</label></div>' +
@@ -588,12 +622,14 @@
       pe: '<button class="btn" data-fechar>Cancelar</button><button class="btn pri" id="u-ok" data-carregando=" Salvando...">' + (u.id ? 'Salvar' : 'Criar conta') + '</button>'
     });
     var perfilSel = function () { var r = el.querySelector('[name="u-perfil"]:checked'); return r ? r.value : 'sdr'; };
-    var metas = function () { var p = perfilSel(); el.querySelector('#u-meta-r').style.display = p === 'sdr' ? '' : 'none'; el.querySelector('#u-meta-v').style.display = p === 'sdr' ? 'none' : ''; };
+    var metas = function () { var p = perfilSel(); el.querySelector('#u-meta-r').style.display = p === 'sdr' ? '' : 'none'; el.querySelector('#u-meta-v').style.display = p === 'sdr' || p === 'personalizado' ? 'none' : ''; el.querySelector('#u-areas-box').style.display = p === 'personalizado' ? '' : 'none'; };
+    C.$$('[data-pronto]', el).forEach(function (b) { b.onclick = function () { var a = C.PERFIS_PRONTOS[b.dataset.pronto].areas; C.$$('[data-area]', el).forEach(function (x) { x.checked = a.indexOf(x.dataset.area) >= 0; }); }; });
     C.$$('[name="u-perfil"]', el).forEach(function (r) { r.onchange = metas; });
     metas();
     el.querySelector('#u-gerar').onclick = function () { el.querySelector('#u-senha').value = Math.random().toString(36).slice(2, 7) + '-' + Math.random().toString(36).slice(2, 7); };
     el.querySelector('#u-ok').onclick = function () {
-      var dados = { id: u.id, nome: el.querySelector('#u-nome').value, email: el.querySelector('#u-email').value, perfil: perfilSel(), senha: el.querySelector('#u-senha').value.trim(), recebe_leads: el.querySelector('#u-recebe').checked ? 'SIM' : 'NAO', ativo: el.querySelector('#u-ativo').checked ? 'SIM' : 'NAO', cor: el.querySelector('#u-cor').value, meta_valor: el.querySelector('#u-mv').value, meta_reunioes: el.querySelector('#u-mr').value };
+      var dados = { id: u.id, nome: el.querySelector('#u-nome').value, email: el.querySelector('#u-email').value, perfil: perfilSel(), senha: el.querySelector('#u-senha').value.trim(), recebe_leads: el.querySelector('#u-recebe').checked ? 'SIM' : 'NAO', ativo: el.querySelector('#u-ativo').checked ? 'SIM' : 'NAO', cor: el.querySelector('#u-cor').value, meta_valor: el.querySelector('#u-mv').value, meta_reunioes: el.querySelector('#u-mr').value, permissoes: C.$$('[data-area]', el).filter(function (x) { return x.checked; }).map(function (x) { return x.dataset.area; }).join(',') };
+      if (dados.perfil === 'personalizado' && !dados.permissoes) { C.toast('Marque pelo menos um acesso ou use um dos atalhos.', 'erro'); return; }
       C.comBotao(this, function () {
         return C.api('usuario.salvar', { usuario: dados }).then(function () {
           el.fechar();
@@ -617,13 +653,46 @@
       '<button class="btn" id="sy-limpa" data-carregando=" Limpando...">' + ic('lixo') + ' Limpar registros com mais de 90 dias</button>' +
       '<h3 style="font-size:15px;margin:20px 0 10px">Backup</h3><p class="small muted" style="margin-top:0">Exporte contatos em Contatos > Exportar e negócios em Relatórios. A cópia completa é feita na própria planilha (Arquivo > Fazer uma cópia).</p>' +
       (C.ehDemo() ? '<button class="btn perigo" id="sy-reset">' + ic('atualizar') + ' Reiniciar dados da demonstração</button>' : '') + '</div></div>' +
+      '<div class="card card-pad" style="margin-top:16px" id="sy-sup"></div><div class="card card-pad" style="margin-top:16px" id="sy-lim"><div style="text-align:center;padding:20px"><span class="spin" style="color:var(--pri)"></span></div></div>' +
       '<div class="card card-pad" style="margin-top:16px" id="sy-arq"><div style="text-align:center;padding:20px"><span class="spin" style="color:var(--pri)"></span></div></div>';
     C.$('#sy-limpa').onclick = function () { var b = this; C.comBotao(b, function () { return C.api('historico.limpar', { dias: 90 }).then(function (r) { C.toast(r.fila + ' envios e ' + r.execucoes + ' execuções antigas removidos', 'ok'); }); }); };
     if (C.$('#sy-reset')) C.$('#sy-reset').onclick = function () { window.PrumoDemo.resetar(); };
+    pintarSuporte(C.$('#sy-sup'), S.suporte || {});
+    C.api('limites').then(function (r) { pintarLimites(C.$('#sy-lim'), r); }).catch(function (e) { C.$('#sy-lim').innerHTML = '<p class="muted">' + esc(e.message) + '</p>'; });
     C.api('arquivo.listar').then(function (r) { pintarArquivo(C.$('#sy-arq'), r); }).catch(function (e) { C.$('#sy-arq').innerHTML = '<p class="muted">' + esc(e.message) + '</p>'; });
   }
 
   function nomeMes(m) { var n = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']; return n[Number(m.slice(5, 7)) - 1] + ' ' + m.slice(0, 4); }
+  function pintarSuporte(box, sp) {
+    if (!box) return;
+    var st = !sp.tem ? ['Sem código', 'st-off'] : sp.ativo ? ['Ativo', 'st-on'] : ['Encerrado', 'st-erro'];
+    box.innerHTML = '<div class="card-cab" style="padding:0 0 10px;border:0"><h3 style="font-size:15px">' + ic('escudo') + ' Plano de suporte e atualizações</h3><span class="status ' + st[1] + '" style="margin-left:auto">' + st[0] + '</span></div>' +
+      (sp.tem ? '<div class="grade2"><div class="dado">Plano: <b>' + esc(sp.nome_plano) + '</b></div><div class="dado">Válido até: <b>' + sp.ate.split('-').reverse().join('/') + '</b>' + (sp.ativo ? ' (' + sp.dias + ' dias)' : '') + '</div>' + (sp.cliente ? '<div class="dado">Licenciado para: <b>' + esc(sp.cliente) + '</b></div>' : '') + (sp.contato ? '<div class="dado">Suporte: <b>' + esc(sp.contato) + '</b></div>' : '') + '</div>' : '') +
+      '<p class="small muted">Você pagou uma vez e o sistema é seu para sempre. O plano de suporte define até quando você recebe atualizações, novas funções e correções. Depois disso o sistema continua funcionando como está; integrações de terceiros (Meta, Mercado Pago, Evolution) podem mudar com o tempo e precisar de atualização.</p>' +
+      (C.pode('equipe') ? '<div class="campo"><label>Código de suporte (veio na sua compra)</label><div class="linha"><input class="inp" id="sp-cod" placeholder="Cole o código aqui"><button class="btn" id="sp-ok" style="flex:0 0 auto" data-carregando=" Conferindo...">Salvar código</button></div></div>' : '') +
+      '<div class="dado small">Versão instalada: <b>' + esc(sp.versao || '') + '</b></div>';
+    var b = box.querySelector('#sp-ok');
+    if (b) b.onclick = function () { C.comBotao(b, function () { return C.api('suporte.salvar', { codigo: box.querySelector('#sp-cod').value }).then(function (r) { S.suporte = r; pintarSuporte(box, r); C.toast(r.tem ? 'Código de suporte salvo' : 'Código removido', 'ok'); }); }); };
+  }
+  function barraUso(rot, usado, limite, nota) {
+    var p = limite ? Math.min(100, Math.round(usado / limite * 100)) : 0;
+    return '<div class="uso"><div class="uso-cab"><b>' + rot + '</b><span class="small">' + (limite ? C.inteiro(usado) + ' de ' + C.inteiro(limite) : C.inteiro(usado)) + '</span></div>' + (limite ? '<div class="meta-barra' + (p > 85 ? ' alerta' : '') + '"><div style="width:' + p + '%"></div></div>' : '') + (nota ? '<div class="small muted">' + nota + '</div>' : '') + '</div>';
+  }
+  function pintarLimites(box, r) {
+    if (!box) return;
+    var wa = { evolution: 'Evolution API: sem limite fixo. Para não ser bloqueado, recomendamos até ~200 contatos novos por dia por número, com intervalo entre mensagens.', waha: 'WAHA: sem limite fixo. Mesma recomendação da Evolution (até ~200 contatos novos por dia).', meta: 'API oficial: a Meta define quantos clientes novos por dia você pode chamar (começa em 250 e sobe com a qualidade do número). Veja no Gerenciador do WhatsApp.', link: 'Modo link: cada mensagem é enviada à mão.' }[r.provedor] || '';
+    box.innerHTML = '<div class="card-cab" style="padding:0 0 10px;border:0"><h3 style="font-size:15px">' + ic('relatorios') + ' Limites e uso</h3></div>' +
+      '<p class="small muted" style="margin-top:0">O sistema não limita usuários, contatos nem conversas. Os limites abaixo são do Google, da Meta e dos serviços gratuitos que ele usa.</p><div class="usos">' +
+      barraUso('Usuários ativos', r.usuarios, 0, 'Sem limite.') +
+      (r.planilha ? barraUso('Espaço da planilha (células)', r.planilha.celulas, r.planilha.limite, 'Limite do Google Planilhas. O arquivo mensal mantém o uso baixo. Cabem ainda cerca de ' + C.inteiro(r.contatos_capacidade) + ' contatos.') : barraUso('Contatos', r.contatos, 0, 'Sem limite próprio (no servidor, o limite é o espaço da planilha).')) +
+      barraUso('Contatos na base', r.contatos, 0, '') +
+      barraUso('Mensagens neste mês', r.mensagens_mes, 0, 'Os meses anteriores vão para o arquivo mensal.') +
+      barraUso('E-mails hoje', r.email.enviados_hoje, r.email.por_dia, 'Gmail: cerca de 100 por dia (1.500 no Google Workspace). Brevo grátis: 300 por dia. O que passar sai no dia seguinte.') +
+      barraUso('Disparos de WhatsApp hoje', r.disparos_hoje, 0, wa) +
+      barraUso('Chamadas externas hoje (aprox.)', r.chamadas_hoje, r.workspace ? 100000 : 20000, 'Cota diária do Google para o servidor falar com WhatsApp, Instagram, e-mail e Mercado Pago.') +
+      (r.instagram ? barraUso('Instagram', 0, 0, 'A Meta limita as mensagens automáticas no Direct (na prática, cerca de 200 por hora por conta).') : '') +
+      '</div>';
+  }
   function mesAnterior(m) { var a = Number(m.slice(0, 4)), n = Number(m.slice(5, 7)) - 1; if (!n) { n = 12; a--; } return a + '-' + ('0' + n).slice(-2); }
   function pintarArquivo(box, r) {
     if (!box) return;

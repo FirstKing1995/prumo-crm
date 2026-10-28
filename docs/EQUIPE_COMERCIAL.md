@@ -8,6 +8,13 @@
 | Gestor | Acompanha a operação, faz disparos, automações e relatórios | Tudo, menos Equipe, Integrações e Ajustes |
 | SDR | Atende os leads novos, qualifica e passa os prontos para um closer | Leads sem dono, os seus e os que ele passou |
 | Closer | Recebe os leads qualificados e fecha a venda | Só os contatos e negócios dele |
+| Personalizado | O que o administrador liberar: ver todos os contatos, disparos e e-mail, automações, relatórios, financeiro, integrações, ajustes, excluir, equipe | Depende do que foi liberado |
+
+Para o perfil personalizado há atalhos prontos: **Gestor de tráfego** (todos os contatos, relatórios e integrações, para acompanhar origens e anúncios), **Marketing** (todos os contatos, disparos, e-mail, automações e relatórios), **Financeiro** (todos os contatos, financeiro e relatórios) e **Suporte e atendimento** (fila de leads e todos os contatos).
+
+## Tarefas de cada pessoa
+
+Cada pessoa vê as próprias tarefas na tela Tarefas e no Painel. Quem tem acesso a todos os contatos pode escolher de quem ver as tarefas, ou a equipe inteira.
 
 Contas criadas antes da versão 1.1 com o perfil "Atendente" continuam funcionando como SDR.
 

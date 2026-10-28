@@ -98,13 +98,36 @@
   C.etapa = function (id) { var e = null; S.funis.forEach(function (f) { f.etapas.forEach(function (x) { if (x.id === id) e = x; }); }); return e; };
   C.funil = function (id) { return S.funis.filter(function (f) { return f.id === id; })[0] || null; };
   C.pode = function (area) { return !!S.perm[area]; };
+  /** Salva um texto como resposta rápida (modelo de mensagem), pedindo título e atalho. */
+  C.salvarComoModelo = function (texto, midia) {
+    if (!String(texto || '').trim()) { C.toast('Escreva a mensagem antes de salvar como modelo.', 'erro'); return; }
+    var el = C.modal({
+      titulo: 'Salvar como modelo',
+      corpo: '<div class="grade2"><div class="campo"><label>Título</label><input class="inp" id="sm-t" value="' + C.esc(String(texto).trim().slice(0, 40)) + '"></div><div class="campo"><label>Atalho (para usar com /)</label><input class="inp" id="sm-a" placeholder="ex.: preco"></div></div><p class="small muted" style="margin:0">Fica em Ajustes > Respostas rápidas e aparece na conversa e nos disparos.</p>',
+      pe: '<button class="btn" data-fechar>Cancelar</button><button class="btn pri" id="sm-ok" data-carregando=" Salvando...">Salvar modelo</button>'
+    });
+    el.querySelector('#sm-ok').onclick = function () {
+      C.comBotao(this, function () {
+        return C.api('modelo.salvar', { modelo: { titulo: el.querySelector('#sm-t').value, atalho: el.querySelector('#sm-a').value, texto: texto, midia_url: (midia && midia.url) || '', midia_tipo: (midia && midia.tipo) || '' } })
+          .then(function (r) { S.modelos.push(r); el.fechar(); C.toast('Modelo salvo', 'ok'); });
+      });
+    };
+  };
   /** Perfis de acesso (o servidor confere as permissões de verdade). */
   C.PERFIS = {
     admin: { nome: 'Administrador', desc: 'Cria as contas da equipe, configura integrações, marca e regras. Vê tudo.' },
     gestor: { nome: 'Gestor', desc: 'Vê toda a operação, faz disparos, automações e relatórios. Não mexe em equipe nem integrações.' },
     sdr: { nome: 'SDR', desc: 'Atende os leads novos (os sem dono e os seus), qualifica e passa para um closer, com reunião se quiser.' },
     closer: { nome: 'Closer', desc: 'Recebe os leads qualificados e fecha a venda. Vê só os contatos e negócios dele.' },
-    atendente: { nome: 'Atendente', desc: 'Atende conversas e os seus contatos. Funciona como o SDR.' }
+    atendente: { nome: 'Atendente', desc: 'Atende conversas e os seus contatos. Funciona como o SDR.' },
+    personalizado: { nome: 'Personalizado', desc: 'Você escolhe o que a pessoa acessa. Ideal para gestor de tráfego, marketing, financeiro ou suporte.' }
+  };
+  /** Atalhos para o perfil personalizado. */
+  C.PERFIS_PRONTOS = {
+    trafego: { nome: 'Gestor de tráfego', areas: ['todos', 'relatorios', 'integracoes'] },
+    marketing: { nome: 'Marketing', areas: ['todos', 'disparos', 'automacoes', 'relatorios'] },
+    financeiro: { nome: 'Financeiro', areas: ['todos', 'financeiro', 'relatorios'] },
+    suporte: { nome: 'Suporte e atendimento', areas: ['fila', 'todos'] }
   };
   C.av = function (nome, cls, cor) { return '<span class="av ' + (cls || '') + '" style="background:' + (cor || C.corDe(nome)) + '">' + C.esc(C.iniciais(nome)) + '</span>'; };
   C.todasTags = function () {
