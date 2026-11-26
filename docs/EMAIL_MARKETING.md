@@ -25,7 +25,7 @@ Em **Integrações > Envio de e-mails (Gmail e Brevo)**:
 3. **Brevo (opcional):** crie a conta grátis, cadastre e confirme o remetente, gere a chave da API e cole aqui.
 4. Clique em **Testar** e confira a caixa de entrada (e o spam).
 
-Na primeira vez, o Google pede autorização para o script "enviar e-mail como você". Isso acontece quando você roda **instalar** depois de atualizar o código.
+Na primeira vez, o Google pede autorização para o script "enviar e-mail como você". Isso acontece quando você implanta o servidor.
 
 ## Campanhas
 

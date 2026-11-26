@@ -25,19 +25,23 @@ fs.mkdirSync(path.join(pasta, 'planilha'), { recursive: true });
 // 2) copia só o que o cliente precisa
 fs.cpSync(path.join(raiz, 'app'), path.join(pasta, 'site'), { recursive: true });
 fs.writeFileSync(path.join(pasta, 'site', '.nojekyll'), '');
-fs.writeFileSync(path.join(pasta, 'site', 'config.js'),
-  "/*\n * CONFIGURAÇÃO (opcional)\n * Cole aqui a URL do seu Apps Script (termina em /exec) para a equipe não precisar\n * colar o endereço na primeira tela. Deixe vazio para mostrar a tela de conexão.\n */\nwindow.PRUMO = {\n  API_URL: ''\n};\n");
+if (/API_URL: '[^']/.test(fs.readFileSync(path.join(pasta, 'site', 'config.js'), 'utf8'))) throw new Error('app/config.js está com API_URL preenchida: limpe antes de empacotar.');
 fs.copyFileSync(path.join(raiz, 'backend/Codigo.gs'), path.join(pasta, 'planilha/Codigo.gs'));
+fs.copyFileSync(path.join(raiz, 'backend/appsscript.json'), path.join(pasta, 'planilha/appsscript.json'));
 fs.cpSync(path.join(raiz, 'docs'), path.join(pasta, 'docs'), { recursive: true });
 fs.writeFileSync(path.join(pasta, 'LEIA-ME.txt'), [
   'PRUMO CRM ' + versao,
   '',
   'Conteúdo:',
   '  site/               arquivos do site. Sobem no seu GitHub (GitHub Pages).',
-  '  planilha/Codigo.gs  código do servidor. Vai no Apps Script da sua planilha Google.',
+  '  planilha/Codigo.gs  código do servidor (o mesmo que já vem dentro da planilha modelo).',
+  '  planilha/appsscript.json  configurações do servidor (só para quem monta a planilha do zero).',
   '  docs/               guias de instalação, WhatsApp e integrações.',
   '',
-  'Comece por docs/INSTALACAO.md.',
+  'A instalação normal não precisa deste pacote: copie a planilha modelo, implante o servidor e',
+  'cole a URL na tela "Ligar o sistema" (docs/INSTALACAO.md).',
+  'Este pacote serve para publicar as telas no seu próprio GitHub Pages (fim do guia) ou guardar',
+  'uma cópia de tudo.',
   'Seu plano de suporte e o que ele inclui: docs/SUPORTE_E_ATUALIZACOES.md.',
   'Cole o código de suporte que veio na sua compra em Ajustes > Sistema > Plano de suporte.',
   '',
@@ -46,7 +50,7 @@ fs.writeFileSync(path.join(pasta, 'LEIA-ME.txt'), [
 ].join('\r\n'));
 
 // 3) confere que nada pessoal ou de desenvolvimento foi junto
-const proibidos = /dhione|cambraia|gmail\.com|4blue|firstking/i;
+const proibidos = /dhione|cambraia|gmail\.com|4blue|firstking|brasa|arcana|navalha/i;
 const varrer = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
   const p = path.join(d, e.name);
   if (e.isDirectory()) return varrer(p);

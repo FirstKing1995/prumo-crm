@@ -4,3 +4,6 @@ _site/
 Thumbs.db
 *.log
 dist/
+.claude/
+servidor-modelo/
+vendas-brasa/

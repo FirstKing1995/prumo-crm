@@ -1,6 +1,8 @@
 # Prumo CRM
 
-CRM para pequenas empresas com WhatsApp, robôs de atendimento, disparos, grupos e funil de vendas. Licença de pagamento único: o servidor roda na conta Google do cliente (Planilhas + Apps Script) e as telas ficam no GitHub Pages do próprio cliente. Custo de infraestrutura zero.
+CRM para pequenas empresas com WhatsApp, robôs de atendimento, disparos, grupos e funil de vendas. Licença de pagamento único: o servidor roda na conta Google do cliente (Planilhas + Apps Script) e as telas ficam hospedadas pelo vendedor (ou no GitHub Pages do próprio cliente, pelo ZIP). Custo de infraestrutura zero.
+
+Instalação em 3 passos, sem editar código: copiar a planilha modelo (o servidor vem junto), implantar como App da Web e colar a URL na tela "Ligar o sistema", que cria o administrador, as abas e o gatilho. Detalhes em [docs/INSTALACAO.md](docs/INSTALACAO.md).
 
 Sistema white label: cada empresa troca nome, logo e cores pelo próprio sistema.
 
@@ -36,6 +38,7 @@ app/                 telas do sistema (HTML, CSS e JS puros, sem build)
   g.html             página pública do link inteligente de grupos
 backend/
   plataforma.gs      servidor Apps Script (planilha, webhooks, gatilho de 1 minuto)
+  appsscript.json    manifesto (fuso, App da Web como "Qualquer pessoa")
   Codigo.gs          arquivo único para colar no Apps Script (gerado)
 docs/                instalação, WhatsApp e integrações (vão para o cliente)
 ferramentas/         montar.js, testar.js (+ testar-novos.js) e empacotar.js
@@ -51,7 +54,9 @@ Gera `backend/Codigo.gs` juntando `backend/plataforma.gs` e `app/js/logica.js`. 
 ```bash
 node ferramentas/testar.js
 ```
-Testa a lógica do servidor (webhooks reais da Evolution, WAHA e Meta, robô, disparos, permissões).
+Testa a lógica do servidor (webhooks reais da Evolution, WAHA e Meta, robô, disparos, permissões, instalação pela tela "Ligar o sistema").
+
+Planilha modelo: o script dela fica em `servidor-modelo/` (fora do git). Para atualizar: `node ferramentas/montar.js`, copie `backend/Codigo.gs` para `servidor-modelo/Codigo.js` e rode `clasp push -f` nessa pasta.
 
 Para ver localmente: sirva a pasta `app` (ex.: `python -m http.server 5180 --directory app`) e abra `http://localhost:5180/?demo=1`.
 

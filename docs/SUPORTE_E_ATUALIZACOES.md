@@ -36,4 +36,4 @@ O administrador recebe um aviso no Painel 15 dias antes do fim do plano e quando
 
 ## Atualizar para uma versão nova
 
-O passo a passo está em `docs/INSTALACAO.md`, na parte "Atualizar para uma versão nova". Em resumo: colar o `Codigo.gs` novo no Apps Script, rodar **instalar**, publicar a nova versão e subir os arquivos novos da pasta `site` no GitHub. Seus dados não são apagados.
+O passo a passo está em `docs/INSTALACAO.md`, na parte "Atualizar para uma versão nova". Em resumo: colar o `Codigo.gs` novo no Apps Script e implantar uma nova versão. As telas hospedadas já ficam atualizadas; se você publica as telas no seu GitHub, suba também os arquivos novos da pasta `site`. Seus dados não são apagados.

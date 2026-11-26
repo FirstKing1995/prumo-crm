@@ -7,7 +7,7 @@
    Tudo o que depende do lugar (ler/gravar dados, chamar URLs, cache, hora)
    chega pelo objeto P ("plataforma"). Nada aqui conhece planilha ou navegador.
    ========================================================================== */
-var PRUMO_VERSAO = '1.3.0';
+var PRUMO_VERSAO = '1.4.0';
 
 var PRUMO_ESQUEMA = {
   Usuarios: ['id', 'nome', 'email', 'senha_hash', 'salt', 'perfil', 'ativo', 'recebe_leads', 'cor', 'ultimo_acesso', 'criado_em', 'meta_valor', 'meta_reunioes', 'permissoes'],
@@ -53,6 +53,11 @@ var PRUMO_CONFIG_PADRAO = {
   LOGO_URL: '',
   COR_PRIMARIA: '#1F6FEB',
   COR_DESTAQUE: '#F2A900',
+  LOGIN_TITULO: 'Todo cliente acompanhado, do primeiro oi até a venda.',
+  LOGIN_ITENS: 'Conversas do WhatsApp em um só lugar\nRobôs que respondem e qualificam sozinhos\nDisparos com intervalo seguro\nFunil de vendas e relatórios da equipe',
+  LOGIN_RODAPE: 'Seus dados ficam na sua própria conta Google.',
+  CONTATO_AJUDA: '',            // aparece na tela de entrada (ex.: "Dúvidas? WhatsApp (11) 99999-0000")
+  INSTALADO_EM: '',
   MOEDA: 'BRL',
   SEGMENTO: 'geral',
   CONFIGURADO: 'NAO',
@@ -178,7 +183,11 @@ function PrumoLogica(P) {
 
   function marca() {
     var c = cfg();
-    return { nome: c.NOME, slogan: c.SLOGAN, logo: c.LOGO_URL, cor: c.COR_PRIMARIA, destaque: c.COR_DESTAQUE, configurado: c.CONFIGURADO === 'SIM' };
+    return {
+      nome: c.NOME, slogan: c.SLOGAN, logo: c.LOGO_URL, cor: c.COR_PRIMARIA, destaque: c.COR_DESTAQUE, configurado: c.CONFIGURADO === 'SIM',
+      titulo: c.LOGIN_TITULO, rodape: c.LOGIN_RODAPE, contato: c.CONTATO_AJUDA,
+      itens: U.str(c.LOGIN_ITENS).split('\n').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 6)
+    };
   }
 
   /* ====================================================== histórico/log */
@@ -2421,7 +2430,7 @@ function PrumoLogica(P) {
     return o;
   }
 
-  var CHAVES_EDITAVEIS = Object.keys(PRUMO_CONFIG_PADRAO).filter(function (k) { return ['PROX_TRABALHO', 'WEBHOOK_CHAVE', 'ENTRADA_CHAVE', 'API_CHAVE', 'VENDAS_CHAVE', 'ARQUIVO_FEITO', 'ARQUIVO_PASTA', 'EMAIL_CONTAGEM', 'RASTREIO_SEGREDO', 'SITE_URL', 'MP_CHAVE', 'FIN_VERIFICADO', 'SUPORTE_CODIGO'].indexOf(k) < 0; });
+  var CHAVES_EDITAVEIS = Object.keys(PRUMO_CONFIG_PADRAO).filter(function (k) { return ['PROX_TRABALHO', 'WEBHOOK_CHAVE', 'ENTRADA_CHAVE', 'API_CHAVE', 'VENDAS_CHAVE', 'ARQUIVO_FEITO', 'ARQUIVO_PASTA', 'EMAIL_CONTAGEM', 'RASTREIO_SEGREDO', 'SITE_URL', 'MP_CHAVE', 'FIN_VERIFICADO', 'SUPORTE_CODIGO', 'INSTALADO_EM'].indexOf(k) < 0; });
 
   function bootstrap(user) {
     var contatos = filtraContatosDoUsuario(user, P.tabela('Contatos'));
@@ -3214,8 +3223,27 @@ function PrumoLogica(P) {
   }
 
   /* =========================================================== público */
+  /** Primeiro acesso pela tela "Ligar o sistema": cria o administrador. Só funciona enquanto não existe nenhum usuário. */
+  function instalado() { return P.tabela('Usuarios').length > 0; }
+  function primeiroAdmin(b) {
+    if (instalado()) throw new Error('Este sistema já foi ligado. Entre com o e-mail e a senha do administrador.');
+    var n = Number(P.cache.get('inst_min') || 0);
+    if (n > 10) throw new Error('Muitas tentativas agora. Aguarde um minuto.');
+    P.cache.put('inst_min', String(n + 1), 60);
+    var nome = U.cap(U.str(b.nome).trim(), 60), email = U.str(b.email).trim().toLowerCase(), senha = U.str(b.senha);
+    if (!nome) throw new Error('Informe o seu nome.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Informe um e-mail válido.');
+    if (senha.length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
+    if (/^(.)\1+$/.test(senha) || /^(12345678|87654321|senha123|password|qwerty12)/i.test(senha)) throw new Error('Escolha uma senha mais difícil de adivinhar.');
+    semear({ nome: nome, email: email, senha: senha });
+    salvarCfg({ INSTALADO_EM: P.agora() });
+    return login(email, senha);
+  }
+
   function publico(acao, b) {
     if (acao === 'publico.marca') return marca();
+    if (acao === 'publico.estado') return { instalado: instalado(), versao: PRUMO_VERSAO, marca: marca() };
+    if (acao === 'publico.instalar') return primeiroAdmin(b);
     if (acao === 'publico.grupo') {
       var slug = U.norm(b.slug);
       var gs = P.tabela('Grupos').filter(function (g) { return g.slug === slug && g.ativo === 'SIM' && g.link; })
@@ -3256,7 +3284,7 @@ function PrumoLogica(P) {
 
   return {
     U: U, WA: WA, IG: IG, INT: INT, EM: EM, FIN: FIN, CHAT: CHAT, SUP: SUP, cfg: cfg, arquivar: arquivar, receberRastreio: receberRastreio, salvarCfg: salvarCfg, rotear: rotear, receberWebhook: receberWebhook, trabalhar: trabalhar,
-    semear: semear, receber: receber, montarTexto: montarTexto, filtrarContatos: filtrarContatos, versao: PRUMO_VERSAO
+    semear: semear, instalado: instalado, receber: receber, montarTexto: montarTexto, filtrarContatos: filtrarContatos, versao: PRUMO_VERSAO
   };
 }
 

@@ -429,7 +429,7 @@
   function botaoSalvar(id) { return '<button class="btn pri" id="' + id + '" data-carregando=" Salvando...">Salvar alterações</button>'; }
 
   function ajMarca(box) {
-    var d = { NOME: CFGA.NOME, SLOGAN: CFGA.SLOGAN, COR_PRIMARIA: CFGA.COR_PRIMARIA, COR_DESTAQUE: CFGA.COR_DESTAQUE, LOGO_URL: CFGA.LOGO_URL };
+    var d = { NOME: CFGA.NOME, SLOGAN: CFGA.SLOGAN, COR_PRIMARIA: CFGA.COR_PRIMARIA, COR_DESTAQUE: CFGA.COR_DESTAQUE, LOGO_URL: CFGA.LOGO_URL, LOGIN_TITULO: CFGA.LOGIN_TITULO || '', LOGIN_ITENS: CFGA.LOGIN_ITENS || '', LOGIN_RODAPE: CFGA.LOGIN_RODAPE || '', CONTATO_AJUDA: CFGA.CONTATO_AJUDA || '' };
     var cores = ['#1F6FEB', '#0F766E', '#16A34A', '#7C3AED', '#DB2777', '#DC2626', '#EA580C', '#0EA5E9', '#334155', '#9A3412'];
     var pinta = function () {
       box.innerHTML = '<div class="grid-2" style="align-items:start"><div class="card card-pad">' +
@@ -438,9 +438,17 @@
         '<div class="campo"><label>Logo</label><div style="display:flex;gap:10px;align-items:center">' + C.logoHtml({ nome: d.NOME, logo: d.LOGO_URL }).replace('marca-logo', 'marca-logo" style="width:48px;height:48px;border-radius:12px') + '<input type="file" class="inp" id="mk-logo" accept="image/*">' + (d.LOGO_URL ? '<button class="btn peq" id="mk-tira">Remover</button>' : '') + '</div></div>' +
         '<div class="campo"><label>Cor principal</label><div class="cores-prontas">' + cores.map(function (c) { return '<button type="button" data-cor="' + c + '" style="background:' + c + '" class="' + (c.toLowerCase() === String(d.COR_PRIMARIA).toLowerCase() ? 'on' : '') + '" aria-label="' + c + '"></button>'; }).join('') + '<input type="color" class="inp-cor" id="mk-cor" value="' + esc(d.COR_PRIMARIA) + '"></div></div>' +
         '<div class="campo"><label>Cor de destaque</label><input type="color" class="inp-cor" id="mk-acc" value="' + esc(d.COR_DESTAQUE) + '"></div>' +
+        '<h3 style="font-size:14px;margin:20px 0 4px">Tela de entrada</h3><p class="small muted" style="margin:0 0 10px">Textos que a equipe vê antes de entrar no sistema.</p>' +
+        '<div class="campo"><label>Título</label><input class="inp" id="mk-tit" maxlength="90" value="' + esc(d.LOGIN_TITULO) + '"></div>' +
+        '<div class="campo"><label>Itens da lista (um por linha, até 6)</label><textarea class="inp" id="mk-itens" rows="4">' + esc(d.LOGIN_ITENS) + '</textarea></div>' +
+        '<div class="campo"><label>Rodapé</label><input class="inp" id="mk-rod" maxlength="120" value="' + esc(d.LOGIN_RODAPE) + '"></div>' +
+        '<div class="campo"><label>Contato para ajuda (opcional)</label><input class="inp" id="mk-cont" maxlength="120" placeholder="Ex.: Dúvidas? Fale com a gente no (11) 99999-0000" value="' + esc(d.CONTATO_AJUDA) + '"></div>' +
         botaoSalvar('mk-ok') + '</div><div><span class="rot">Prévia ao vivo</span><div class="previa-marca" style="margin-top:6px"><div class="ps"><i class="on"></i><i></i><i></i><i></i></div><div class="pc"><div class="card" style="padding:10px"><b style="font-size:12px">Vendido no mês</b><div style="font-size:20px;font-weight:800">R$ 18,4 mil</div></div><div style="display:flex;gap:6px"><span class="btn pri peq">Principal</span><span class="btn acc peq">Destaque</span></div></div></div>' +
         '<p class="small muted">As cores são aplicadas para toda a equipe assim que você salvar.</p></div></div>';
-      var ler = function () { d.NOME = box.querySelector('#mk-nome').value.trim(); d.SLOGAN = box.querySelector('#mk-slogan').value.trim(); d.COR_DESTAQUE = box.querySelector('#mk-acc').value; };
+      var ler = function () {
+        d.NOME = box.querySelector('#mk-nome').value.trim(); d.SLOGAN = box.querySelector('#mk-slogan').value.trim(); d.COR_DESTAQUE = box.querySelector('#mk-acc').value;
+        d.LOGIN_TITULO = box.querySelector('#mk-tit').value.trim(); d.LOGIN_ITENS = box.querySelector('#mk-itens').value.trim(); d.LOGIN_RODAPE = box.querySelector('#mk-rod').value.trim(); d.CONTATO_AJUDA = box.querySelector('#mk-cont').value.trim();
+      };
       var previa = function () { C.aplicarMarca({ nome: d.NOME, slogan: d.SLOGAN, cor: d.COR_PRIMARIA, destaque: d.COR_DESTAQUE, logo: d.LOGO_URL }); };
       C.$$('[data-cor]', box).forEach(function (b) { b.onclick = function () { ler(); d.COR_PRIMARIA = b.dataset.cor; previa(); pinta(); }; });
       box.querySelector('#mk-cor').onchange = function () { ler(); d.COR_PRIMARIA = this.value; previa(); pinta(); };
@@ -452,7 +460,7 @@
         var b = this;
         C.comBotao(b, function () {
           if (!d.NOME) throw new Error('Dê um nome ao sistema.');
-          return salvarCfg(d).then(function () { S.config.marca = { nome: d.NOME, slogan: d.SLOGAN, cor: d.COR_PRIMARIA, destaque: d.COR_DESTAQUE, logo: d.LOGO_URL, configurado: true }; C.aplicarMarca(S.config.marca); C.renderNav(); C.toast('Marca salva', 'ok'); });
+          return salvarCfg(d).then(function () { S.config.marca = { nome: d.NOME, slogan: d.SLOGAN, cor: d.COR_PRIMARIA, destaque: d.COR_DESTAQUE, logo: d.LOGO_URL, configurado: true, titulo: d.LOGIN_TITULO, rodape: d.LOGIN_RODAPE, contato: d.CONTATO_AJUDA, itens: d.LOGIN_ITENS.split('\n').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 6) }; C.aplicarMarca(S.config.marca); C.renderNav(); C.toast('Marca salva', 'ok'); });
         });
       };
     };

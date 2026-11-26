@@ -27,6 +27,6 @@ No editor do Apps Script também existe a função **arquivarAgora**, que faz o 
 
 ## Permissão do Google
 
-Na primeira vez, o Google pede autorização para o script criar planilhas no seu Drive. Rode a função **instalar** de novo depois de atualizar o código e aceite a permissão. As planilhas ficam só na sua conta: ninguém mais tem acesso.
+Na primeira vez, o Google pede autorização para o script criar planilhas no seu Drive. Ela é pedida quando você implanta o servidor (ou implanta uma versão nova). As planilhas ficam só na sua conta: ninguém mais tem acesso.
 
 Não apague nem renomeie a aba de um mês arquivado. Se apagar uma planilha do arquivo, os dados daquele mês somem do sistema.

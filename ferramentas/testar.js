@@ -139,5 +139,6 @@ ok(JSON.stringify(api('config.ver')).indexOf('"k"') < 0 && api('config.ver').EVO
 require('./testar-novos.js')({ L, P, t, cfg, cache, enviados, api, ok, lanca, arq, iso });
 require('./testar-email.js')({ L, P, t, cfg, enviados, api, ok, lanca, emailsSaidos });
 require('./testar-v13.js')({ L, P, t, cfg, enviados, api, ok, lanca, mpPagamentos });
+require('./testar-instalacao.js')({ P, ok, lanca });
 console.log((total - falhas) + '/' + total + ' testes passaram');
 process.exit(falhas ? 1 : 0);

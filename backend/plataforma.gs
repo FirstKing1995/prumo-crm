@@ -1,22 +1,15 @@
 /* ==========================================================================
    PRUMO CRM — servidor (Google Apps Script)
    --------------------------------------------------------------------------
-   PRIMEIRO USO (o passo a passo completo está em docs/INSTALACAO.md):
-     1. Na planilha: Extensões > Apps Script. Apague tudo e cole este arquivo.
-     2. Troque o e-mail e a senha logo abaixo (ADMIN_INICIAL).
-     3. Selecione a função "instalar" no menu de cima e clique em Executar.
-        Autorize o acesso quando o Google pedir.
-     4. Implantar > Nova implantação > Tipo: App da Web
-        Executar como: Eu | Quem pode acessar: Qualquer pessoa > Implantar.
-     5. Copie a URL que termina em /exec e cole na tela inicial do sistema.
+   INSTALAÇÃO EM 3 PASSOS (nada para editar aqui):
+     1. Abra a planilha modelo e clique em "Fazer uma cópia" (este código vem junto).
+     2. Na cópia: Extensões > Apps Script > Implantar > Nova implantação >
+        App da Web (Executar como: Eu | Quem pode acessar: Qualquer pessoa) >
+        Implantar. Autorize e copie a URL que termina em /exec.
+     3. Abra as telas do sistema, cole a URL em "Ligar o sistema" e crie o seu
+        acesso de administrador. As abas e o gatilho de 1 minuto são criados
+        sozinhos nessa hora.
    ========================================================================== */
-
-// ---- Primeiro acesso (troque antes de rodar "instalar") --------------------
-var ADMIN_INICIAL = {
-  nome: 'Administrador',
-  email: 'admin@suaempresa.com.br',
-  senha: 'troque-esta-senha'
-};
 
 /* --------------------------------------------------------- plataforma */
 var FUSO = 'America/Sao_Paulo';
@@ -256,8 +249,46 @@ var PLAT = {
 
 function aba_(nome) {
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(nome);
-  if (!sh) throw new Error('A aba "' + nome + '" não existe. Rode a função instalar().');
+  if (!sh) {
+    garantirEsquema_(true);
+    sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(nome);
+    if (!sh) throw new Error('A aba "' + nome + '" não existe.');
+  }
   return sh;
+}
+
+/** Cria as abas e colunas que faltam. Roda sozinho na primeira chamada e sempre que a versão muda. */
+function garantirEsquema_(forcar) {
+  var props = PropertiesService.getScriptProperties();
+  if (!forcar && props.getProperty('ESQUEMA') === PRUMO_VERSAO) return;
+  var lock = LockService.getScriptLock(), minha = !lock.hasLock();
+  if (minha && !lock.tryLock(25000)) throw new Error('O sistema está se preparando. Tente de novo em alguns segundos.');
+  try { criarEsquema_(); props.setProperty('ESQUEMA', PRUMO_VERSAO); } finally { if (minha) lock.releaseLock(); }
+}
+function criarEsquema_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ss.setSpreadsheetTimeZone(FUSO);
+  Object.keys(PRUMO_ESQUEMA).forEach(function (nome) {
+    var cab = PRUMO_ESQUEMA[nome];
+    var sh = ss.getSheetByName(nome) || ss.insertSheet(nome);
+    var atual = sh.getLastColumn() ? sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String) : [];
+    var faltam = cab.filter(function (c) { return atual.indexOf(c) < 0; });
+    if (!atual.filter(Boolean).length) sh.getRange(1, 1, 1, cab.length).setValues([cab]);
+    else if (faltam.length) sh.getRange(1, atual.length + 1, 1, faltam.length).setValues([faltam]);
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight('bold').setBackground('#E8EEF7');
+  });
+  var p1 = ss.getSheetByName('Página1') || ss.getSheetByName('Sheet1');
+  if (p1 && ss.getSheets().length > 1 && p1.getLastRow() === 0) ss.deleteSheet(p1);
+  memo_ = {};
+}
+
+/** O gatilho de 1 minuto. Criado na primeira conexão; recriado se alguém apagar. */
+function garantirGatilho_() {
+  var props = PropertiesService.getScriptProperties();
+  var tem = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'trabalhar'; });
+  if (!tem) ScriptApp.newTrigger('trabalhar').timeBased().everyMinutes(1).create();
+  props.setProperty('GATILHO_OK', PLAT.agora());
 }
 
 var LOGICA_ = null;
@@ -309,6 +340,7 @@ function doGet(e) {
 function doPost(e) {
   var p = (e && e.parameter) || {};
   var bruto = (e && e.postData && e.postData.contents) || '';
+  try { garantirEsquema_(false); } catch (eq) { return json_({ ok: false, error: String(eq.message || eq) }); }
   var body = {};
   try { body = JSON.parse(bruto || '{}'); } catch (err) { body = {}; }
   if ((!body || !Object.keys(body).length) && Object.keys(p).length) {
@@ -327,7 +359,11 @@ function doPost(e) {
   }
   // Chamadas do site
   try {
-    var leitura = /^(bootstrap|sync|conversa\.abrir|contato\.ver|relatorio|config\.ver|wa\.status|campanha\.envios|campanha\.custo|automacao\.execucoes|contato\.publico|publico\.marca|arquivo\.listar|arquivo\.contato|integracao\.testar|financeiro\.resumo|cobranca\.listar|limites|suporte\.ver|publico\.chat\.config|publico\.chat\.receber)$/.test(body.action);
+    if (body.action === 'publico.instalar') return json_({ ok: true, data: comTrava_(function () { return ligarSistema_(body); }) });
+    if (body.action === 'bootstrap' && !PropertiesService.getScriptProperties().getProperty('GATILHO_OK')) {
+      try { garantirGatilho_(); } catch (eg) { registrarErro_('gatilho', eg, ''); }
+    }
+    var leitura = /^(publico\.estado|bootstrap|sync|conversa\.abrir|contato\.ver|relatorio|config\.ver|wa\.status|campanha\.envios|campanha\.custo|automacao\.execucoes|contato\.publico|publico\.marca|arquivo\.listar|arquivo\.contato|integracao\.testar|financeiro\.resumo|cobranca\.listar|limites|suporte\.ver|publico\.chat\.config|publico\.chat\.receber)$/.test(body.action);
     var exec = function () { return logica_().rotear(body); };
     var dados = leitura ? exec() : comTrava_(exec);
     return json_({ ok: true, data: dados });
@@ -359,38 +395,69 @@ function registrarErro_(onde, err, bruto) {
 }
 
 /* ------------------------------------------------------------ instalação */
-/** Rode UMA vez: cria as abas, o administrador, os modelos e o gatilho de 1 minuto. */
-function instalar() {
-  if (ADMIN_INICIAL.senha === 'troque-esta-senha' || ADMIN_INICIAL.senha.length < 8) {
-    throw new Error('Antes de instalar, troque o e-mail e a senha em ADMIN_INICIAL (mínimo 8 caracteres).');
-  }
+/** Tela "Ligar o sistema": cria o administrador, guarda o endereço do servidor e liga o gatilho de 1 minuto. */
+function ligarSistema_(body) {
+  var r = logica_().rotear(body); // publico.instalar: recusa se já existe usuário
+  var url = String(body.servidor || '');
+  if (/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) PropertiesService.getScriptProperties().setProperty('URL_APP', url);
+  try { garantirGatilho_(); } catch (e) { registrarErro_('gatilho', e, ''); }
+  return r;
+}
+
+/** Menu na planilha, para quem abrir a planilha antes de ligar o sistema. */
+function onOpen() {
+  try { abaComeceAqui_(); } catch (e0) { /* sem permissão: segue só com o menu */ }
+  try {
+    SpreadsheetApp.getUi().createMenu('Sistema')
+      .addItem('Como ligar o sistema', 'mostrarComoLigar')
+      .addItem('Criar nova senha do administrador', 'redefinirSenhaAdmin')
+      .addToUi();
+  } catch (e) { /* aberto fora da planilha */ }
+}
+/** Planilha recém-copiada: mostra a aba "Comece aqui" com os passos. Some da frente depois de ligado. */
+function abaComeceAqui_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  ss.setSpreadsheetTimeZone(FUSO);
-  Object.keys(PRUMO_ESQUEMA).forEach(function (nome) {
-    var cab = PRUMO_ESQUEMA[nome];
-    var sh = ss.getSheetByName(nome) || ss.insertSheet(nome);
-    var atual = sh.getLastColumn() ? sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String) : [];
-    var faltam = cab.filter(function (c) { return atual.indexOf(c) < 0; });
-    if (!atual.filter(Boolean).length) {
-      sh.getRange(1, 1, 1, cab.length).setValues([cab]);
-    } else if (faltam.length) {
-      sh.getRange(1, atual.length + 1, 1, faltam.length).setValues([faltam]);
-    }
-    sh.setFrozenRows(1);
-    sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight('bold').setBackground('#E8EEF7');
-  });
-  var p1 = ss.getSheetByName('Página1') || ss.getSheetByName('Sheet1');
-  if (p1 && ss.getSheets().length > 1 && p1.getLastRow() === 0) ss.deleteSheet(p1);
-  memo_ = {};
-  logica_().semear(ADMIN_INICIAL);
-  instalarGatilho();
-  Logger.log('Pronto! Agora publique: Implantar > Nova implantação > App da Web (Executar como: Eu, Acesso: Qualquer pessoa).');
-  Logger.log('Login: ' + ADMIN_INICIAL.email);
+  if (ss.getSheetByName('Usuarios') || ss.getSheetByName('Comece aqui')) return;
+  var sh = ss.getSheets()[0];
+  if (sh.getLastRow() > 0) sh = ss.insertSheet('Comece aqui', 0); else sh.setName('Comece aqui');
+  var linhas = [
+    'COMECE AQUI: ligar o sistema em 3 passos', '',
+    '1. Feito: esta é a sua cópia da planilha. O servidor do sistema já veio junto.',
+    '2. No menu: Extensões > Apps Script. No editor: Implantar > Nova implantação.',
+    '    Na engrenagem, escolha "App da Web". Executar como: Eu. Quem pode acessar: Qualquer pessoa.',
+    '    Clique em Implantar, depois em Autorizar acesso e escolha a sua conta.',
+    '    Se aparecer "O Google não verificou este app": Avançado > Acessar (não seguro). O app é seu e roda só na sua conta.',
+    '    Copie a "URL do app da Web" (termina em /exec).',
+    '3. Abra o endereço das telas que veio na sua compra, cole a URL em "Ligar o sistema" e crie o seu acesso.', '',
+    'As abas do sistema aparecem nesta planilha sozinhas. Não apague nem renomeie essas abas.',
+    'Esqueceu a senha do administrador? Menu Sistema > Criar nova senha do administrador.'
+  ];
+  sh.getRange(1, 1, linhas.length, 1).setValues(linhas.map(function (l) { return [l]; })).setFontSize(11);
+  sh.getRange(1, 1).setFontSize(16).setFontWeight('bold');
+  sh.setColumnWidth(1, 900);
+  try { sh.setHiddenGridlines(true); } catch (e) { /* versões antigas */ }
+}
+
+function mostrarComoLigar() {
+  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(
+    '<div style="font-family:sans-serif;font-size:14px;line-height:1.5">' +
+    '<ol><li>Menu <b>Extensões &gt; Apps Script</b>.</li>' +
+    '<li>No editor: <b>Implantar &gt; Nova implantação</b>. Na engrenagem, escolha <b>App da Web</b>. Executar como: <b>Eu</b>. Quem pode acessar: <b>Qualquer pessoa</b>. Clique em <b>Implantar</b> e autorize.</li>' +
+    '<li>Copie a <b>URL do app da Web</b> (termina em /exec) e cole na tela <b>Ligar o sistema</b>.</li></ol>' +
+    '<p>Não apague nem renomeie as abas que o sistema criar.</p></div>').setWidth(460).setHeight(300), 'Como ligar o sistema');
+}
+
+/** Opcional: prepara as abas e o gatilho pelo editor (a tela "Ligar o sistema" já faz isso sozinha). */
+function instalar() {
+  garantirEsquema_(true);
+  logica_().semear(null);
+  garantirGatilho_();
+  Logger.log('Pronto. Agora implante como App da Web e cole a URL /exec na tela "Ligar o sistema".');
 }
 
 function instalarGatilho() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'trabalhar') ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('trabalhar').timeBased().everyMinutes(1).create();
+  garantirGatilho_();
 }
 
 /** Arquivo mensal manual: move o que é de meses anteriores para as planilhas mensais no Drive.
@@ -407,11 +474,15 @@ function definirUrlDoApp() {
   PropertiesService.getScriptProperties().setProperty('URL_APP', url);
 }
 
-/** Esqueceu a senha? Troque o e-mail/senha em ADMIN_INICIAL e rode esta função. */
+/** Esqueceu a senha? Rode esta função (ou use o menu Sistema da planilha): cria uma senha nova
+    para o primeiro administrador e mostra no registro de execução. Troque depois em Equipe e acessos. */
 function redefinirSenhaAdmin() {
-  var u = PLAT.tabela('Usuarios').filter(function (x) { return x.email === ADMIN_INICIAL.email.toLowerCase(); })[0];
-  if (!u) throw new Error('Não existe usuário com o e-mail ' + ADMIN_INICIAL.email);
+  var u = PLAT.tabela('Usuarios').filter(function (x) { return x.perfil === 'admin'; })[0];
+  if (!u) throw new Error('Ainda não existe administrador. Ligue o sistema pela tela "Ligar o sistema".');
+  var senha = Utilities.getUuid().replace(/-/g, '').slice(0, 12);
   var salt = Utilities.getUuid();
-  PLAT.atualizar('Usuarios', u.id, { senha_hash: PLAT.hash(ADMIN_INICIAL.senha, salt), salt: salt, ativo: 'SIM', perfil: 'admin' });
-  Logger.log('Senha redefinida para ' + u.email);
+  PLAT.atualizar('Usuarios', u.id, { senha_hash: PLAT.hash(senha, salt), salt: salt, ativo: 'SIM' });
+  var msg = 'Administrador: ' + u.email + '\nSenha nova: ' + senha;
+  Logger.log(msg);
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* rodado pelo editor */ }
 }
