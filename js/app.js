@@ -27,32 +27,74 @@
   ];
 
   /* ------------------------------------------------------ primeiro acesso */
+  var RX_SERVIDOR = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+  var CFG_SITE = window.PRUMO || {};
+
   function telaConectar() {
-    $app.innerHTML = '<div class="login"><div class="login-arte">' + arteLogin({ nome: 'Prumo CRM' }) + '</div>' +
+    var ajuda = CFG_SITE.AJUDA_URL ? ' <a href="' + esc(CFG_SITE.AJUDA_URL) + '" target="_blank" rel="noopener">Ver o passo a passo em vídeo</a>.' : '';
+    $app.innerHTML = '<div class="login"><div class="login-arte">' + arteLogin({ nome: CFG_SITE.NOME || 'Prumo CRM' }) + '</div>' +
       '<div class="login-form"><div class="caixa">' +
-      '<h1>Vamos ligar o seu sistema</h1><p class="muted" style="margin:0 0 20px">Cole o endereço do seu servidor (a URL do Apps Script que termina em <b>/exec</b>). Você só faz isso uma vez neste aparelho.</p>' +
-      '<div class="campo"><label for="c-url">Endereço do servidor</label><input class="inp" id="c-url" placeholder="https://script.google.com/macros/s/.../exec"></div>' +
+      '<h1>Ligar o sistema</h1><p class="muted" style="margin:0 0 16px">Cole o endereço do seu servidor. Você só faz isso uma vez em cada aparelho.</p>' +
+      '<ol class="passos-tut" style="margin:0 0 18px"><li><b>Copie a planilha modelo</b>Abra o link da planilha que veio na compra e clique em <b>Fazer uma cópia</b>.</li>' +
+      '<li><b>Implante o servidor</b>Na cópia: <b>Extensões &gt; Apps Script &gt; Implantar &gt; Nova implantação &gt; App da Web</b>. Quem pode acessar: <b>Qualquer pessoa</b>. Autorize e copie a URL.</li>' +
+      '<li><b>Cole a URL aqui</b>Ela começa com https://script.google.com e termina em <b>/exec</b>.</li></ol>' +
+      '<div class="campo"><label for="c-url">Endereço do servidor</label><input class="inp" id="c-url" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/.../exec"></div>' +
       '<button class="btn pri bloco" id="c-ok" data-carregando=" Conectando...">Conectar</button>' +
-      '<p class="small muted" style="margin:16px 0 0">Ainda não instalou? Siga o guia <b>docs/INSTALACAO.md</b> que veio com o sistema. Leva uns 10 minutos.</p>' +
+      '<p class="small muted" style="margin:14px 0 0">Leva uns 5 minutos.' + ajuda + '</p>' +
       '<div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--borda)"><button class="btn bloco" id="c-demo">' + ic('olho') + ' Ver demonstração com dados de exemplo</button></div>' +
       '</div></div></div>';
+    var urlPedida = (location.search.match(/[?&]servidor=([^&]+)/) || [])[1];
+    if (urlPedida) C.$('#c-url').value = decodeURIComponent(urlPedida);
     C.$('#c-ok').onclick = function () {
-      var url = C.$('#c-url').value.trim();
+      var url = C.$('#c-url').value.trim().replace(/\/dev$/, '/exec');
       C.comBotao(this, function () {
-        if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) throw new Error('A URL precisa ser do Apps Script e terminar em /exec.');
+        if (/\/edit|\/home\/projects|docs\.google\.com/.test(url)) throw new Error('Esse é o endereço do editor ou da planilha. Copie a "URL do app da Web", que aparece depois de Implantar e termina em /exec.');
+        if (!RX_SERVIDOR.test(url)) throw new Error('A URL precisa começar com https://script.google.com/macros/s/ e terminar em /exec.');
         C.store.set('prumo_api', url);
-        return C.api('publico.marca').then(function (m) { C.aplicarMarca(m); renderLogin(); })
-          .catch(function (e) { C.store.del('prumo_api'); throw e; });
+        return C.api('publico.estado').then(function (st) {
+          C.aplicarMarca(st.marca);
+          if (st.instalado) renderLogin(); else telaPrimeiroAdmin(url);
+        }).catch(function (e) { C.store.del('prumo_api'); throw e; });
       });
     };
     C.$('#c-demo').onclick = function () { C.store.set('prumo_api', 'demo'); location.reload(); };
   }
 
+  /** Servidor novo, sem ninguém cadastrado: cria o acesso do administrador. */
+  function telaPrimeiroAdmin(url) {
+    $app.innerHTML = '<div class="login"><div class="login-arte">' + arteLogin(C.store.get('prumo_marca', {})) + '</div>' +
+      '<div class="login-form"><form id="f-adm" class="caixa" autocomplete="on">' +
+      '<h1>Servidor conectado</h1><p class="muted" style="margin:0 0 20px">Falta só criar o seu acesso. Você será o administrador e depois cadastra a equipe.</p>' +
+      '<div class="campo"><label for="a-nome">Seu nome</label><input class="inp" id="a-nome" autocomplete="name" maxlength="60" required></div>' +
+      '<div class="campo"><label for="a-email">E-mail</label><input class="inp" id="a-email" type="email" autocomplete="username" required></div>' +
+      '<div class="campo"><label for="a-senha">Senha (mínimo 8 caracteres)</label><input class="inp" id="a-senha" type="password" autocomplete="new-password" minlength="8" required></div>' +
+      '<div class="campo"><label for="a-senha2">Repita a senha</label><input class="inp" id="a-senha2" type="password" autocomplete="new-password" minlength="8" required></div>' +
+      '<button class="btn pri bloco" type="submit" data-carregando=" Ligando o sistema...">Criar acesso e entrar</button>' +
+      '<p class="small muted" style="margin:14px 0 0">Na primeira vez o servidor prepara a planilha. Pode levar até um minuto.</p>' +
+      '<p class="small" style="margin-top:14px;text-align:center"><a href="#" id="a-trocar">Usar outro servidor</a></p>' +
+      '</form></div></div>';
+    C.$('#a-trocar').onclick = function (e) { e.preventDefault(); C.store.del('prumo_api'); telaConectar(); };
+    C.$('#f-adm').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var btn = this.querySelector('button[type=submit]');
+      C.comBotao(btn, function () {
+        var senha = C.$('#a-senha').value;
+        if (senha !== C.$('#a-senha2').value) throw new Error('As duas senhas não são iguais.');
+        return C.api('publico.instalar', { nome: C.$('#a-nome').value, email: C.$('#a-email').value, senha: senha, servidor: url }).then(function (d) {
+          S.token = d.token; S.user = d.usuario;
+          C.store.set('prumo_sessao', { token: d.token });
+          return iniciarSessao();
+        });
+      });
+    });
+  }
+
   function arteLogin(m) {
+    var itens = m.itens && m.itens.length ? m.itens : ['Conversas do WhatsApp em um só lugar', 'Robôs que respondem e qualificam sozinhos', 'Disparos com intervalo seguro', 'Funil de vendas e relatórios da equipe'];
     return '<div class="marca" style="padding:0">' + C.logoHtml(m) + '<div><b>' + esc(m.nome || 'Prumo CRM') + '</b><small>' + esc(m.slogan || '') + '</small></div></div>' +
-      '<div><h2>Todo cliente acompanhado, do primeiro oi até a venda.</h2><ul>' +
-      ['Conversas do WhatsApp em um só lugar', 'Robôs que respondem e qualificam sozinhos', 'Disparos com intervalo seguro', 'Funil de vendas e relatórios da equipe']
-        .map(function (t) { return '<li>' + ic('check') + t + '</li>'; }).join('') + '</ul></div><div class="small" style="color:#64748B">Seus dados ficam na sua própria conta Google.</div>';
+      '<div><h2>' + esc(m.titulo || 'Todo cliente acompanhado, do primeiro oi até a venda.') + '</h2><ul>' +
+      itens.map(function (t) { return '<li>' + ic('check') + esc(t) + '</li>'; }).join('') + '</ul></div>' +
+      '<div class="small" style="color:#64748B">' + esc(m.rodape === undefined ? 'Seus dados ficam na sua própria conta Google.' : m.rodape) + (m.contato ? '<br>' + esc(m.contato) : '') + '</div>';
   }
 
   /* ------------------------------------------------------------- login */
@@ -83,7 +125,10 @@
         });
       });
     });
-    if (!C.ehDemo()) C.api('publico.marca').then(function (mm) { if (JSON.stringify(mm) !== JSON.stringify(m)) { C.aplicarMarca(mm); renderLogin(); } }).catch(function () { /* offline */ });
+    if (!C.ehDemo()) C.api('publico.estado').then(function (st) {
+      if (!st.instalado) return telaPrimeiroAdmin(C.apiUrl());
+      if (JSON.stringify(st.marca) !== JSON.stringify(m)) { C.aplicarMarca(st.marca); renderLogin(); }
+    }).catch(function () { /* offline ou servidor antigo */ });
   }
 
   C.sairLocal = function () {
@@ -170,7 +215,7 @@
       } else {
         corpo = '<h1 style="font-size:24px;margin-bottom:6px">Tudo pronto para começar</h1><p class="muted" style="margin:0 0 18px">Próximos passos recomendados:</p>' +
           '<ol class="passos-tut"><li><b>Conectar o WhatsApp</b>Em Integrações, escolha a forma de conexão. Há tutorial passo a passo para cada uma.</li>' +
-          '<li><b>Cadastrar a equipe</b>Em Ajustes > Equipe, crie um acesso para cada atendente.</li>' +
+          '<li><b>Cadastrar a equipe</b>Em Equipe e acessos, crie uma conta para cada pessoa da equipe.</li>' +
           '<li><b>Importar seus contatos</b>Em Contatos > Importar, envie a planilha (CSV) que você já tem.</li>' +
           '<li><b>Ligar uma automação</b>Já deixamos três modelos prontos em Automações. É só revisar o texto e ativar.</li></ol>';
       }

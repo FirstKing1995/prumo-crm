@@ -226,7 +226,7 @@
     if (url === 'demo') p = window.PrumoDemo.call(body);
     else p = fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), redirect: 'follow' })
       .catch(function () { throw new Error('Sem conexão com o servidor. Confira sua internet.'); })
-      .then(function (r) { return r.json().catch(function () { throw new Error('O servidor respondeu algo inesperado. Confira se a URL do Apps Script está certa e publicada para "Qualquer pessoa".'); }); });
+      .then(function (r) { return r.json().catch(function () { throw new Error('O servidor respondeu algo inesperado. Confira se você copiou a URL do app da Web (termina em /exec) e se, ao implantar, escolheu "Quem pode acessar: Qualquer pessoa".'); }); });
     return p.then(function (r) {
       if (!r.ok) {
         if (r.auth) { C.sairLocal(); throw new Error('Sua sessão expirou. Entre novamente.'); }
